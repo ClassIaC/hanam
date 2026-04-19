@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="stats-grid">
+  <article class="stat-card">
+    <p class="stat-label">이번 달 급여 반영 시간</p>
+    <p class="stat-value">{{ month_pay_hours }}시간</p>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">내 스케줄 건수</p>
+    <p class="stat-value">{{ shift_count }}</p>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">근무기록 승인 대기</p>
+    <p class="stat-value">{{ pending_log_count }}</p>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">요청 처리 대기</p>
+    <p class="stat-value">{{ request_pending_count }}</p>
+  </article>
+</section>
+
+<section class="card">
+  <h2>내 월간 스케줄 캘린더</h2>
+  <form method="get" class="calendar-toolbar">
+    <div>
+      <label>월 선택</label>
+      <input type="month" name="month" value="{{ staff_view_month }}" required />
+    </div>
+    <div>
+      <label>상세 날짜</label>
+      <input type="date" name="date" value="{{ staff_selected_date }}" required />
+    </div>
+    <button type="submit">이동</button>
+  </form>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>{{ staff_view_month }} 내 스케줄</h2>
+    <div class="calendar-grid">
+      <div class="calendar-head">월</div>
+      <div class="calendar-head">화</div>
+      <div class="calendar-head">수</div>
+      <div class="calendar-head">목</div>
+      <div class="calendar-head">금</div>
+      <div class="calendar-head">토</div>
+      <div class="calendar-head">일</div>
+      {% for week in staff_calendar_weeks %}
+        {% for day in week %}
+          {% if day %}
+          <a class="calendar-cell {% if day['is_today'] %}today{% endif %} {% if day['is_selected'] %}selected{% endif %}"
+             href="{{ url_for('staff_dashboard', month=staff_view_month, date=day['date']) }}">
+            <div class="calendar-date">{{ day['day'] }}</div>
+            <div class="calendar-count">{{ day['shifts']|length }}건</div>
+            {% for s in day['shifts'][:3] %}
+            <div class="calendar-name">{{ s['start_time'] }} ~ {{ s['end_time'] }}</div>
+            {% endfor %}
+            {% if day['shifts']|length > 3 %}
+            <div class="calendar-more">+{{ day['shifts']|length - 3 }}건</div>
+            {% endif %}
+          </a>
+          {% else %}
+          <div class="calendar-cell empty"></div>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="card">
+    <h2>{{ staff_selected_date }} 상세 근무</h2>
+    {% if my_day_shifts %}
+    <table>
+      <thead>
+        <tr><th>시작</th><th>종료</th><th>메모</th></tr>
+      </thead>
+      <tbody>
+        {% for s in my_day_shifts %}
+        <tr>
+          <td>{{ s['start_time'] }}</td>
+          <td>{{ s['end_time'] }}</td>
+          <td>{{ s['note'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>선택한 날짜에 등록된 근무가 없습니다.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>이번 달 승인 근무시간</h2>
+    <p class="big">{{ month_pay_hours }}시간</p>
+    <p class="help">급여 계산 기준: 30분 단위 반올림</p>
+  </article>
+
+  <article class="card">
+    <h2>근무기록 등록</h2>
+    <form method="post" action="{{ url_for('create_work_log') }}" class="form-grid">
+      <label>근무일</label>
+      <input type="date" name="work_date" value="{{ today_date }}" required />
+      <label>출근</label>
+      <input type="time" name="clock_in" value="{{ default_start_time }}" required />
+      <label>퇴근</label>
+      <input type="time" name="clock_out" value="{{ default_end_time }}" required />
+      <label>메모</label>
+      <input type="text" name="note" />
+      <button type="submit">기록 제출</button>
+    </form>
+  </article>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>희망 근무/휴무 요청</h2>
+    <form method="post" action="{{ url_for('create_availability_request') }}" class="form-grid">
+      <label>요청 종류</label>
+      <select name="request_type" required>
+        <option value="preferred_weekday">희망 근무요일</option>
+        <option value="day_off">휴무 요청</option>
+      </select>
+      <label>희망 근무요일</label>
+      <select name="weekday">
+        <option value="">선택</option>
+        {% for w in weekday_options %}
+        <option value="{{ w[0] }}">{{ w[1] }}</option>
+        {% endfor %}
+      </select>
+      <label>휴무 희망일</label>
+      <input type="date" name="request_date" value="{{ today_date }}" />
+      <label>메모</label>
+      <input type="text" name="note" placeholder="예: 휴무" />
+      <button type="submit">요청 등록</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h2>내 스케줄</h2>
+    <table>
+      <thead>
+        <tr><th>날짜</th><th>시작</th><th>종료</th><th>메모</th></tr>
+      </thead>
+      <tbody>
+        {% for s in my_shifts %}
+        <tr>
+          <td>{{ s['work_date'] }}</td>
+          <td>{{ s['start_time'] }}</td>
+          <td>{{ s['end_time'] }}</td>
+          <td>{{ s['note'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+
+  <article class="card">
+    <h2>내 근무기록</h2>
+    <table>
+      <thead>
+        <tr><th>날짜</th><th>시간</th><th>총 시간</th><th>상태</th></tr>
+      </thead>
+      <tbody>
+        {% for l in my_logs %}
+        <tr>
+          <td>{{ l['work_date'] }}</td>
+          <td>{{ l['clock_in'] }} ~ {{ l['clock_out'] }}</td>
+          <td>{{ minutes_to_pay_hours(l['total_minutes']) }}시간</td>
+        <td>
+          {% if l['status'] == 'pending' %}
+          <span class="status-badge pending">대기</span>
+          {% elif l['status'] == 'approved' %}
+          <span class="status-badge approved">승인</span>
+          {% else %}
+          <span class="status-badge rejected">반려</span>
+          {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+
+<section class="card">
+  <h2>내 요청 내역</h2>
+  <table>
+    <thead>
+      <tr><th>요청</th><th>상세</th><th>상태</th><th>등록일</th></tr>
+    </thead>
+    <tbody>
+      {% for r in my_requests %}
+      <tr>
+        <td>{% if r['request_type'] == 'preferred_weekday' %}희망 근무요일{% else %}휴무 요청{% endif %}</td>
+        <td>
+          {% if r['request_type'] == 'preferred_weekday' %}
+            {% for w in weekday_options %}
+              {% if w[0]|int == r['weekday'] %}{{ w[1] }}{% endif %}
+            {% endfor %}
+          {% else %}
+            {{ r['request_date'] }}
+          {% endif %}
+          {% if r['note'] %} / {{ r['note'] }}{% endif %}
+        </td>
+        <td>
+          {% if r['status'] == 'pending' %}
+          <span class="status-badge pending">대기</span>
+          {% elif r['status'] == 'approved' %}
+          <span class="status-badge approved">승인</span>
+          {% else %}
+          <span class="status-badge rejected">반려</span>
+          {% endif %}
+        </td>
+        <td>{{ r['created_at'][:10] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

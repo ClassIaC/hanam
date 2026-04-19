@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="stats-grid">
+  <article class="stat-card">
+    <p class="stat-label">활성 직원</p>
+    <p class="stat-value">{{ approved_staff_count }}</p>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">가입 승인 대기</p>
+    <p class="stat-value">{{ pending_staff|length }}</p>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">근무기록 승인 대기</p>
+    <p class="stat-value">{{ pending_logs|length }}</p>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">요청 접수</p>
+    <p class="stat-value">{{ recent_requests|length }}</p>
+  </article>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>알바 계정 생성</h2>
+    <a class="link" href="{{ url_for('admin_calendar') }}">달력으로 날짜별 근무자 보기</a>
+    <a class="link" href="{{ url_for('monthly_report_csv') }}">월간 리포트 CSV 다운로드</a>
+    <form method="post" action="{{ url_for('create_staff') }}" class="form-grid">
+      <label>이름</label>
+      <input name="full_name" required />
+      <label>아이디</label>
+      <input name="username" required />
+      <label>초기 비밀번호</label>
+      <input name="temp_password" type="password" minlength="8" required />
+      <button type="submit">계정 생성</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h2>가입 승인 대기</h2>
+    {% if pending_staff %}
+    <table>
+      <thead>
+        <tr><th>이름</th><th>아이디</th><th>처리</th></tr>
+      </thead>
+      <tbody>
+        {% for s in pending_staff %}
+        <tr>
+          <td>{{ s['full_name'] }}</td>
+          <td>{{ s['username'] }}</td>
+          <td class="actions">
+            <form method="post" action="{{ url_for('approve_staff', staff_id=s['id']) }}">
+              <button type="submit">승인</button>
+            </form>
+            <form method="post" action="{{ url_for('reject_staff', staff_id=s['id']) }}">
+              <button type="submit" class="btn-secondary">반려</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>대기 중인 가입 요청이 없습니다.</p>
+    {% endif %}
+  </article>
+</section>
+
+<section class="card">
+  <h2>직원 목록</h2>
+  <table>
+    <thead>
+      <tr><th>이름</th><th>상태</th><th>계정 처리</th></tr>
+    </thead>
+    <tbody>
+      {% for s in staff_list %}
+      <tr>
+        <td>{{ s['full_name'] }}</td>
+        <td>
+          {% if s['approval_status'] == 'pending' %}
+          <span class="status-badge pending">승인 대기</span>
+          {% elif s['is_active'] %}
+          <span class="status-badge approved">활성</span>
+          {% else %}
+          <span class="status-badge rejected">비활성</span>
+          {% endif %}
+        </td>
+        <td>
+          <form method="post" action="{{ url_for('delete_staff', staff_id=s['id']) }}" onsubmit="return confirm('정말 삭제하시겠습니까? 삭제 후 목록에서 사라집니다.');">
+            <button type="submit" class="btn-danger">삭제 처리</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>스케줄 등록</h2>
+    <form method="post" action="{{ url_for('create_shift') }}" class="form-grid">
+      <label>직원 이름</label>
+      <select name="staff_id" required>
+        {% for s in staff_list %}
+        {% if s['is_active'] and s['approval_status'] == 'approved' %}
+        <option value="{{ s['id'] }}">{{ s['full_name'] }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+      <label>근무일</label>
+      <input type="date" name="work_date" value="{{ today_date }}" required />
+      <label>시작</label>
+      <input type="time" name="start_time" value="{{ default_start_time }}" required />
+      <label>종료</label>
+      <input type="time" name="end_time" value="{{ default_end_time }}" required />
+      <label>메모</label>
+      <input name="note" />
+      <button type="submit">스케줄 저장</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h2>승인 대기 근무기록</h2>
+    <table>
+      <thead>
+        <tr><th>날짜</th><th>직원</th><th>시간</th><th>총 시간</th><th>처리</th></tr>
+      </thead>
+      <tbody>
+        {% for l in pending_logs %}
+        <tr>
+          <td>{{ l['work_date'] }}</td>
+          <td>{{ l['staff_name'] }}</td>
+          <td>{{ l['clock_in'] }} ~ {{ l['clock_out'] }}</td>
+          <td>{{ minutes_to_pay_hours(l['total_minutes']) }}</td>
+          <td class="actions">
+            <form method="post" action="{{ url_for('approve_work_log', log_id=l['id']) }}">
+              <button type="submit">승인</button>
+            </form>
+            <form method="post" action="{{ url_for('reject_work_log', log_id=l['id']) }}">
+              <button type="submit" class="btn-secondary">반려</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>최근 스케줄</h2>
+    <table>
+      <thead>
+        <tr><th>날짜</th><th>직원</th><th>시간</th><th>메모</th></tr>
+      </thead>
+      <tbody>
+        {% for s in shifts %}
+        <tr>
+          <td>{{ s['work_date'] }}</td>
+          <td>{{ s['staff_name'] }}</td>
+          <td>{{ s['start_time'] }} ~ {{ s['end_time'] }}</td>
+          <td>{{ s['note'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+
+  <article class="card">
+    <h2>직원별 총 승인 시간</h2>
+    <table>
+      <thead>
+        <tr><th>직원</th><th>총 시간</th></tr>
+      </thead>
+      <tbody>
+        {% for m in monthly_hours %}
+        <tr>
+          <td>{{ m['staff_name'] }}</td>
+          <td>{{ m['pay_hours'] }}시간</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+
+<section class="card">
+  <h2>직원 희망 근무/휴무 요청</h2>
+  <table>
+    <thead>
+      <tr><th>직원</th><th>요청</th><th>상세</th><th>상태</th><th>처리</th></tr>
+    </thead>
+    <tbody>
+      {% for r in recent_requests %}
+      <tr>
+        <td>{{ r['full_name'] }}</td>
+        <td>{% if r['request_type'] == 'preferred_weekday' %}희망 근무요일{% else %}휴무 요청{% endif %}</td>
+        <td>
+          {% if r['request_type'] == 'preferred_weekday' %}
+            {% for w in weekday_options %}
+              {% if w[0]|int == r['weekday'] %}{{ w[1] }}{% endif %}
+            {% endfor %}
+          {% else %}
+            {{ r['request_date'] }}
+          {% endif %}
+          {% if r['note'] %} / {{ r['note'] }}{% endif %}
+        </td>
+        <td>
+          {% if r['status'] == 'pending' %}
+          <span class="status-badge pending">대기</span>
+          {% elif r['status'] == 'approved' %}
+          <span class="status-badge approved">승인</span>
+          {% else %}
+          <span class="status-badge rejected">반려</span>
+          {% endif %}
+        </td>
+        <td class="actions">
+          {% if r['status'] == 'pending' %}
+          <form method="post" action="{{ url_for('approve_availability_request', request_id=r['id']) }}">
+            <button type="submit">승인</button>
+          </form>
+          <form method="post" action="{{ url_for('reject_availability_request', request_id=r['id']) }}">
+            <button type="submit" class="btn-secondary">반려</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>최근 관리자 작업 로그</h2>
+  <table>
+    <thead>
+      <tr><th>시간</th><th>작업자</th><th>액션</th><th>상세</th></tr>
+    </thead>
+    <tbody>
+      {% for log in recent_audit_logs %}
+      <tr>
+        <td>{{ log['created_at'][:16].replace('T', ' ') }}</td>
+        <td>{{ log['actor_name'] }}</td>
+        <td>{{ log['action'] }}</td>
+        <td>{{ log['details'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

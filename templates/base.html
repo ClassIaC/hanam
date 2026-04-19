@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>하남 근무관리</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container">
+        <a class="brand" href="{{ url_for('dashboard') }}">하남 근무관리</a>
+        {% if session.get('user_id') %}
+        <div class="user-area">
+          <span class="role-chip">{{ "관리자" if session.get('role') == "admin" else "직원" }}</span>
+          <span>{{ session.get('full_name', session.get('username')) }}</span>
+          <a href="{{ url_for('logout') }}">로그아웃</a>
+        </div>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="container">
+      {% if session.get('user_id') %}
+      <nav class="subnav">
+        {% if session.get('role') == 'admin' %}
+        <a href="{{ url_for('admin_dashboard') }}">대시보드</a>
+        <a href="{{ url_for('admin_calendar') }}">캘린더</a>
+        {% else %}
+        <a href="{{ url_for('staff_dashboard') }}">내 근무</a>
+        {% endif %}
+      </nav>
+      {% endif %}
+      {% with messages = get_flashed_messages() %} {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+        <p>{{ message }}</p>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %} {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

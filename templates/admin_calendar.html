@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>월간 근무 캘린더</h2>
+  <form method="get" class="calendar-toolbar">
+    <div>
+      <label>월 선택</label>
+      <input type="month" name="month" value="{{ view_month }}" required />
+    </div>
+    <div>
+      <label>상세 날짜</label>
+      <input type="date" name="date" value="{{ selected_date }}" required />
+    </div>
+    <button type="submit">이동</button>
+  </form>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>{{ view_month }} 캘린더</h2>
+    <div class="calendar-grid">
+      <div class="calendar-head">월</div>
+      <div class="calendar-head">화</div>
+      <div class="calendar-head">수</div>
+      <div class="calendar-head">목</div>
+      <div class="calendar-head">금</div>
+      <div class="calendar-head">토</div>
+      <div class="calendar-head">일</div>
+
+      {% for week in calendar_weeks %}
+        {% for day in week %}
+          {% if day %}
+          <a
+            class="calendar-cell {% if day['is_today'] %}today{% endif %} {% if day['is_selected'] %}selected{% endif %}"
+            href="{{ url_for('admin_calendar', month=view_month, date=day['date']) }}"
+          >
+            <div class="calendar-date">{{ day['day'] }}</div>
+            <div class="calendar-count">{{ day['shifts']|length }}명</div>
+            {% for s in day['shifts'][:3] %}
+            <div class="calendar-name">{{ s['staff_name'] }}</div>
+            {% endfor %}
+            {% if day['shifts']|length > 3 %}
+            <div class="calendar-more">+{{ day['shifts']|length - 3 }}명</div>
+            {% endif %}
+          </a>
+          {% else %}
+          <div class="calendar-cell empty"></div>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="card">
+    <h2>{{ selected_date }} 상세 근무자</h2>
+    {% if day_shifts %}
+    <table>
+      <thead>
+        <tr><th>직원</th><th>시작</th><th>종료</th><th>메모</th></tr>
+      </thead>
+      <tbody>
+        {% for s in day_shifts %}
+        <tr>
+          <td>{{ s['staff_name'] }}</td>
+          <td>{{ s['start_time'] }}</td>
+          <td>{{ s['end_time'] }}</td>
+          <td>{{ s['note'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>해당 날짜에 등록된 스케줄이 없습니다.</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

@@ -185,6 +185,12 @@ button:hover {
   margin: 0;
 }
 
+.actions input[type="password"] {
+  width: 140px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
 .actions button {
   width: auto;
   min-width: 64px;

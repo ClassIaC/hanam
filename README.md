@@ -42,6 +42,18 @@ python app.py
 - DB: Supabase Free Postgres
 
 배포 절차는 `DEPLOYMENT.md`를 참고하세요.
+
+## 자동 커밋/푸시 (선택)
+지속적으로 수정사항을 원격 저장소에 자동 반영하려면 아래 스크립트를 실행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\auto_commit_push.ps1 -IntervalSeconds 30 -Branch main
+```
+
+- 변경 감지 시 자동 커밋 후 `origin/main`으로 push
+- 기본 커밋 메시지: `auto: sync changes (시간)`
+- `hanam.db`는 자동 커밋에서 제외
+- 중지: `Ctrl + C`
 # 하남돼지 근무관리 MVP (웹)
 
 관리자/알바 계정을 분리해 스케줄과 근무기록을 관리하는 Flask 기반 반응형 웹입니다.

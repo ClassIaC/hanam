@@ -85,9 +85,15 @@
           {% endif %}
         </td>
         <td>
-          <form method="post" action="{{ url_for('delete_staff', staff_id=s['id']) }}" onsubmit="return confirm('정말 삭제하시겠습니까? 삭제 후 목록에서 사라집니다.');">
-            <button type="submit" class="btn-danger">삭제 처리</button>
-          </form>
+          <div class="actions">
+            <form method="post" action="{{ url_for('reset_staff_password', staff_id=s['id']) }}" onsubmit="return confirm('해당 직원 비밀번호를 초기화하시겠습니까? 다음 로그인 시 비밀번호를 변경해야 합니다.');">
+              <input type="password" name="temp_password" minlength="8" placeholder="임시 비밀번호" required />
+              <button type="submit" class="btn-secondary">비번 초기화</button>
+            </form>
+            <form method="post" action="{{ url_for('delete_staff', staff_id=s['id']) }}" onsubmit="return confirm('정말 삭제하시겠습니까? 삭제 후 목록에서 사라집니다.');">
+              <button type="submit" class="btn-danger">삭제 처리</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -196,16 +202,7 @@
       <tr>
         <td>{{ r['full_name'] }}</td>
         <td>{% if r['request_type'] == 'preferred_weekday' %}희망 근무요일{% else %}휴무 요청{% endif %}</td>
-        <td>
-          {% if r['request_type'] == 'preferred_weekday' %}
-            {% for w in weekday_options %}
-              {% if w[0]|int == r['weekday'] %}{{ w[1] }}{% endif %}
-            {% endfor %}
-          {% else %}
-            {{ r['request_date'] }}
-          {% endif %}
-          {% if r['note'] %} / {{ r['note'] }}{% endif %}
-        </td>
+        <td>{{ format_request_detail(r) }}</td>
         <td>
           {% if r['status'] == 'pending' %}
           <span class="status-badge pending">대기</span>

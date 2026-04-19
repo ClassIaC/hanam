@@ -53,6 +53,25 @@ def minutes_to_pay_hours(total_minutes):
     return f"{pay_hours:.1f}"
 
 
+def weekday_label(weekday_value):
+    mapping = {int(value): label for value, label in WEEKDAY_OPTIONS}
+    if weekday_value is None:
+        return ""
+    return mapping.get(int(weekday_value), "")
+
+
+def format_request_detail(request_row):
+    req_type = request_row["request_type"]
+    note = (request_row["note"] or "").strip()
+    if req_type == "preferred_weekday":
+        detail = f"희망요일: {weekday_label(request_row['weekday'])}"
+    else:
+        detail = f"휴무희망일: {request_row['request_date'] or '-'}"
+    if note:
+        detail = f"{detail} ({note})"
+    return detail
+
+
 def is_login_blocked(client_key):
     record = LOGIN_ATTEMPTS.get(client_key)
     if not record:
@@ -394,6 +413,7 @@ def admin_dashboard():
         SELECT s.id, s.work_date, s.start_time, s.end_time, s.note, u.full_name AS staff_name
         FROM shifts s
         JOIN users u ON u.id = s.staff_id
+        WHERE u.is_deleted = 0
         ORDER BY s.work_date DESC, s.start_time DESC
         LIMIT 20
         """
@@ -459,6 +479,7 @@ def admin_dashboard():
         recent_audit_logs=recent_audit_logs,
         approved_staff_count=approved_staff_count,
         minutes_to_pay_hours=minutes_to_pay_hours,
+        format_request_detail=format_request_detail,
     )
 
 
@@ -621,6 +642,42 @@ def delete_staff(staff_id):
     db.commit()
     write_audit_log("staff.delete", f"staff_id={staff_id} 삭제처리")
     flash("직원 계정이 삭제 처리되었습니다.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/staff/<int:staff_id>/reset-password", methods=["POST"])
+@login_required
+@role_required("admin")
+def reset_staff_password(staff_id):
+    temp_password = request.form.get("temp_password", "").strip()
+    if len(temp_password) < 8:
+        flash("임시 비밀번호는 8자 이상이어야 합니다.")
+        return redirect(url_for("admin_dashboard"))
+
+    db = get_db()
+    staff = db.execute(
+        """
+        SELECT id, full_name
+        FROM users
+        WHERE id = ? AND role = 'staff' AND is_deleted = 0
+        """,
+        (staff_id,),
+    ).fetchone()
+    if not staff:
+        flash("비밀번호를 초기화할 직원 계정을 찾을 수 없습니다.")
+        return redirect(url_for("admin_dashboard"))
+
+    db.execute(
+        """
+        UPDATE users
+        SET password_hash = ?, must_change_password = 1
+        WHERE id = ?
+        """,
+        (generate_password_hash(temp_password), staff_id),
+    )
+    db.commit()
+    write_audit_log("staff.password_reset", f"staff_id={staff_id} 비밀번호 초기화")
+    flash(f"{staff['full_name']} 계정 비밀번호가 초기화되었습니다. 다음 로그인 시 변경됩니다.")
     return redirect(url_for("admin_dashboard"))
 
 
@@ -861,6 +918,7 @@ def staff_dashboard():
         staff_calendar_weeks=staff_calendar_weeks,
         my_day_shifts=my_day_shifts,
         minutes_to_pay_hours=minutes_to_pay_hours,
+        format_request_detail=format_request_detail,
     )
 
 
@@ -912,6 +970,10 @@ def create_availability_request():
     if request_type == "day_off" and not request_date:
         flash("휴무 희망일을 선택해 주세요.")
         return redirect(url_for("staff_dashboard"))
+    if request_type == "preferred_weekday":
+        request_date = None
+    if request_type == "day_off":
+        weekday = None
 
     db = get_db()
     db.execute(

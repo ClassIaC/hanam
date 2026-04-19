@@ -116,21 +116,26 @@
 <section class="grid-two">
   <article class="card">
     <h2>희망 근무/휴무 요청</h2>
+    <p class="help">요청 종류를 고르면 필요한 입력만 표시됩니다.</p>
     <form method="post" action="{{ url_for('create_availability_request') }}" class="form-grid">
       <label>요청 종류</label>
-      <select name="request_type" required>
+      <select name="request_type" id="request_type" required>
         <option value="preferred_weekday">희망 근무요일</option>
         <option value="day_off">휴무 요청</option>
       </select>
-      <label>희망 근무요일</label>
-      <select name="weekday">
-        <option value="">선택</option>
-        {% for w in weekday_options %}
-        <option value="{{ w[0] }}">{{ w[1] }}</option>
-        {% endfor %}
-      </select>
-      <label>휴무 희망일</label>
-      <input type="date" name="request_date" value="{{ today_date }}" />
+      <div id="weekday_field">
+        <label>희망 근무요일</label>
+        <select name="weekday" id="weekday_input">
+          <option value="">선택</option>
+          {% for w in weekday_options %}
+          <option value="{{ w[0] }}">{{ w[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="dayoff_field" style="display: none;">
+        <label>휴무 희망일</label>
+        <input type="date" name="request_date" id="request_date_input" />
+      </div>
       <label>메모</label>
       <input type="text" name="note" placeholder="예: 휴무" />
       <button type="submit">요청 등록</button>
@@ -194,16 +199,7 @@
       {% for r in my_requests %}
       <tr>
         <td>{% if r['request_type'] == 'preferred_weekday' %}희망 근무요일{% else %}휴무 요청{% endif %}</td>
-        <td>
-          {% if r['request_type'] == 'preferred_weekday' %}
-            {% for w in weekday_options %}
-              {% if w[0]|int == r['weekday'] %}{{ w[1] }}{% endif %}
-            {% endfor %}
-          {% else %}
-            {{ r['request_date'] }}
-          {% endif %}
-          {% if r['note'] %} / {{ r['note'] }}{% endif %}
-        </td>
+        <td>{{ format_request_detail(r) }}</td>
         <td>
           {% if r['status'] == 'pending' %}
           <span class="status-badge pending">대기</span>
@@ -219,4 +215,30 @@
     </tbody>
   </table>
 </section>
+<script>
+  (function () {
+    const typeSelect = document.getElementById("request_type");
+    const weekdayField = document.getElementById("weekday_field");
+    const dayoffField = document.getElementById("dayoff_field");
+    const weekdayInput = document.getElementById("weekday_input");
+    const dateInput = document.getElementById("request_date_input");
+
+    function syncAvailabilityForm() {
+      const type = typeSelect.value;
+      const isWeekday = type === "preferred_weekday";
+      weekdayField.style.display = isWeekday ? "block" : "none";
+      dayoffField.style.display = isWeekday ? "none" : "block";
+      weekdayInput.required = isWeekday;
+      dateInput.required = !isWeekday;
+      if (isWeekday) {
+        dateInput.value = "";
+      } else {
+        weekdayInput.value = "";
+      }
+    }
+
+    typeSelect.addEventListener("change", syncAvailabilityForm);
+    syncAvailabilityForm();
+  })();
+</script>
 {% endblock %}

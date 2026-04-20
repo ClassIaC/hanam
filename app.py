@@ -1553,9 +1553,16 @@ def delete_board_comment(comment_id):
     return redirect(url_for("board_detail", post_id=comment["post_id"]))
 
 
+_DB_INITIALIZED = False
+
+
 @app.before_request
 def ensure_db():
+    global _DB_INITIALIZED
+    if _DB_INITIALIZED:
+        return
     init_db()
+    _DB_INITIALIZED = True
 
 
 if __name__ == "__main__":

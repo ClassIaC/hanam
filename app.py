@@ -960,15 +960,6 @@ def admin_dashboard():
         """
     ).fetchall()
     pending_requests = [r for r in recent_requests if r["status"] == "pending"]
-    recent_audit_logs = db.execute(
-        """
-        SELECT a.action, a.details, a.created_at, u.full_name AS actor_name
-        FROM audit_logs a
-        JOIN users u ON u.id = a.actor_id
-        ORDER BY a.created_at DESC
-        LIMIT 15
-        """
-    ).fetchall()
 
     return render_template(
         "admin_dashboard.html",
@@ -979,7 +970,6 @@ def admin_dashboard():
         monthly_hours=monthly_hours,
         recent_requests=recent_requests,
         pending_requests=pending_requests,
-        recent_audit_logs=recent_audit_logs,
         approved_staff_count=approved_staff_count,
         minutes_to_pay_hours=minutes_to_pay_hours,
         format_request_detail=format_request_detail,

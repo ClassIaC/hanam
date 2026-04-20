@@ -236,22 +236,4 @@
   </table>
 </section>
 
-<section class="card">
-  <h2>최근 관리자 작업 로그</h2>
-  <table>
-    <thead>
-      <tr><th>시간</th><th>작업자</th><th>액션</th><th>상세</th></tr>
-    </thead>
-    <tbody>
-      {% for log in recent_audit_logs %}
-      <tr>
-        <td>{{ log['created_at'][:16].replace('T', ' ') }}</td>
-        <td>{{ log['actor_name'] }}</td>
-        <td>{{ log['action'] }}</td>
-        <td>{{ log['details'] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
 {% endblock %}

@@ -5,7 +5,7 @@
   <p class="help">작성자: 익명 / {{ post['created_at'][:16].replace('T', ' ') }}</p>
   <p class="board-content">{{ post['content'] }}</p>
   {% if post['image_path'] %}
-  <img class="board-image" src="{{ url_for('static', filename=post['image_path']) }}" alt="게시글 첨부 이미지" />
+  <img class="board-image" src="{{ post['image_path'] | image_url }}" alt="게시글 첨부 이미지" />
   {% endif %}
   {% if post['author_id'] == session.get('user_id') %}
   <form method="post" action="{{ url_for('delete_board_post', post_id=post['id']) }}" onsubmit="return confirm('이 게시글을 삭제하시겠습니까?');">
@@ -39,7 +39,7 @@
       <p class="board-content">{{ c['content'] }}</p>
       {% if c['image_path'] %}
       <div class="board-comment-image-wrap">
-        <img class="board-comment-image" src="{{ url_for('static', filename=c['image_path']) }}" alt="댓글 첨부 이미지" />
+        <img class="board-comment-image" src="{{ c['image_path'] | image_url }}" alt="댓글 첨부 이미지" />
       </div>
       {% endif %}
 
@@ -75,7 +75,7 @@
           <p class="board-content">{{ r['content'] }}</p>
           {% if r['image_path'] %}
           <div class="board-comment-image-wrap">
-            <img class="board-comment-image" src="{{ url_for('static', filename=r['image_path']) }}" alt="대댓글 첨부 이미지" />
+            <img class="board-comment-image" src="{{ r['image_path'] | image_url }}" alt="대댓글 첨부 이미지" />
           </div>
           {% endif %}
           {% if r['author_id'] == session.get('user_id') %}

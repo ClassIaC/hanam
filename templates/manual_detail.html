@@ -11,7 +11,7 @@
   </p>
   {% if manual['image_path'] %}
   <p>
-    <img src="{{ url_for('static', filename=manual['image_path']) }}" alt="매뉴얼 이미지" style="max-width:100%; border-radius:8px;" />
+    <img src="{{ manual['image_path'] | image_url }}" alt="매뉴얼 이미지" style="max-width:100%; border-radius:8px;" />
   </p>
   {% endif %}
   <p class="board-content">{{ manual['content'] }}</p>

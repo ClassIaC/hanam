@@ -27,6 +27,19 @@ app.config["SMTP_FROM"] = os.getenv("SMTP_FROM", "")
 app.config["UPLOAD_DIR"] = os.path.join("static", "uploads")
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
+
+SUPABASE_URL = (os.getenv("SUPABASE_URL", "") or "").rstrip("/")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "")
+USE_SUPABASE_STORAGE = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_BUCKET)
+
+_CONTENT_TYPE_BY_EXT = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
 WEEKDAY_OPTIONS = [
     ("0", "월요일"),
     ("1", "화요일"),
@@ -331,6 +344,52 @@ def notify_staff_by_id(staff_id, subject, body):
     return sent
 
 
+def _supabase_public_prefix():
+    return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/"
+
+
+def _supabase_upload(object_name, file_storage, ext):
+    import requests
+
+    content_type = _CONTENT_TYPE_BY_EXT.get(ext, "application/octet-stream")
+    try:
+        file_storage.stream.seek(0)
+    except Exception:
+        pass
+    data = file_storage.stream.read()
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{object_name}"
+    resp = requests.post(
+        upload_url,
+        headers={
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        },
+        data=data,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return f"{_supabase_public_prefix()}{object_name}"
+
+
+def _supabase_delete(public_url):
+    import requests
+
+    prefix = _supabase_public_prefix()
+    if not public_url.startswith(prefix):
+        return
+    object_name = public_url[len(prefix):]
+    delete_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{object_name}"
+    try:
+        requests.delete(
+            delete_url,
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"},
+            timeout=15,
+        )
+    except Exception as exc:
+        app.logger.error("Supabase delete failed: %s", exc)
+
+
 def save_uploaded_image(file_storage):
     if not file_storage or not file_storage.filename:
         return ""
@@ -341,22 +400,46 @@ def save_uploaded_image(file_storage):
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         return None
     unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}.{ext}"
+
+    if USE_SUPABASE_STORAGE:
+        try:
+            return _supabase_upload(unique_name, file_storage, ext)
+        except Exception as exc:
+            app.logger.error("Supabase upload failed, falling back to local: %s", exc)
+
     saved_path = os.path.join(app.config["UPLOAD_DIR"], unique_name)
+    try:
+        file_storage.stream.seek(0)
+    except Exception:
+        pass
     file_storage.save(saved_path)
     return f"uploads/{unique_name}"
 
 
-def delete_uploaded_image(relative_path):
-    if not relative_path:
+def delete_uploaded_image(path_or_url):
+    if not path_or_url:
         return
-    if not relative_path.startswith("uploads/"):
+    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+        if USE_SUPABASE_STORAGE:
+            _supabase_delete(path_or_url)
         return
-    abs_path = os.path.join("static", *relative_path.split("/"))
+    if not path_or_url.startswith("uploads/"):
+        return
+    abs_path = os.path.join("static", *path_or_url.split("/"))
     if os.path.exists(abs_path):
         try:
             os.remove(abs_path)
         except OSError:
             pass
+
+
+@app.template_filter("image_url")
+def image_url_filter(value):
+    if not value:
+        return ""
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    return url_for("static", filename=value)
 
 
 def build_month_calendar(year, month, shifts_by_date, selected_date):

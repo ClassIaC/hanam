@@ -1318,7 +1318,7 @@ def delete_board_post(post_id):
     if not post:
         flash("게시글을 찾을 수 없습니다.")
         return redirect(url_for("board_list"))
-    if session.get("role") != "admin" and post["author_id"] != session["user_id"]:
+    if post["author_id"] != session["user_id"]:
         flash("삭제 권한이 없습니다.")
         return redirect(url_for("board_detail", post_id=post_id))
 
@@ -1348,7 +1348,7 @@ def delete_board_comment(comment_id):
     if not comment:
         flash("댓글을 찾을 수 없습니다.")
         return redirect(url_for("board_list"))
-    if session.get("role") != "admin" and comment["author_id"] != session["user_id"]:
+    if comment["author_id"] != session["user_id"]:
         flash("삭제 권한이 없습니다.")
         return redirect(url_for("board_detail", post_id=comment["post_id"]))
 

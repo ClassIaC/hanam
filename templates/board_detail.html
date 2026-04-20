@@ -7,7 +7,7 @@
   {% if post['image_path'] %}
   <img class="board-image" src="{{ url_for('static', filename=post['image_path']) }}" alt="게시글 첨부 이미지" />
   {% endif %}
-  {% if session.get('role') == 'admin' or post['author_id'] == session.get('user_id') %}
+  {% if post['author_id'] == session.get('user_id') %}
   <form method="post" action="{{ url_for('delete_board_post', post_id=post['id']) }}" onsubmit="return confirm('이 게시글을 삭제하시겠습니까?');">
     <button type="submit" class="btn-danger">게시글 삭제</button>
   </form>
@@ -47,7 +47,7 @@
         </td>
         <td>{{ c['created_at'][:16].replace('T', ' ') }}</td>
         <td>
-          {% if session.get('role') == 'admin' or c['author_id'] == session.get('user_id') %}
+          {% if c['author_id'] == session.get('user_id') %}
           <form method="post" action="{{ url_for('delete_board_comment', comment_id=c['id']) }}" onsubmit="return confirm('이 댓글을 삭제하시겠습니까?');">
             <button type="submit" class="btn-danger">삭제</button>
           </form>

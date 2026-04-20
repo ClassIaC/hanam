@@ -13,10 +13,12 @@ from flask import Flask, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+from db_schema import PG_INIT_STATEMENTS, SQLITE_CREATE_SCRIPT
+
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change-this-in-production"
-app.config["DATABASE"] = "hanam.db"
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "change-this-in-production")
+app.config["DATABASE"] = os.getenv("SQLITE_PATH", "hanam.db")
 app.config["SMTP_HOST"] = os.getenv("SMTP_HOST", "")
 app.config["SMTP_PORT"] = int(os.getenv("SMTP_PORT", "587"))
 app.config["SMTP_USER"] = os.getenv("SMTP_USER", "")
@@ -38,10 +40,131 @@ LOGIN_ATTEMPTS = {}
 MAX_LOGIN_ATTEMPTS = 5
 
 
+def _database_url():
+    return (os.getenv("DATABASE_URL") or "").strip()
+
+
+USE_POSTGRES = bool(_database_url())
+
+if USE_POSTGRES:
+    import psycopg2
+
+    DBIntegrityError = psycopg2.IntegrityError
+else:
+    DBIntegrityError = sqlite3.IntegrityError
+
+
+def _normalize_postgres_url(url):
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
+class _SqliteCursorAdapter:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+
+class SqliteConnAdapter:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        if params is None:
+            params = ()
+        return _SqliteCursorAdapter(self._conn.execute(sql, params))
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+    def executescript(self, script):
+        self._conn.executescript(script)
+
+
+class _PgCursorAdapter:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def fetchone(self):
+        try:
+            return self._cursor.fetchone()
+        finally:
+            self._close()
+
+    def fetchall(self):
+        try:
+            return self._cursor.fetchall()
+        finally:
+            self._close()
+
+    def _close(self):
+        if self._cursor is not None:
+            try:
+                self._cursor.close()
+            except Exception:
+                pass
+            self._cursor = None
+
+    def __del__(self):
+        self._close()
+
+
+class _PgNoopCursor:
+    """INSERT/UPDATE 등 결과 집합이 없는 실행용 (커서 즉시 닫힘)."""
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+
+class PostgresConnAdapter:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        if params is None:
+            params = ()
+        from psycopg2.extras import RealDictCursor
+
+        adapted = sql.replace("?", "%s")
+        cur = self._conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(adapted, params)
+        head = adapted.lstrip().split(None, 1)[0].upper() if adapted.strip() else ""
+        if head in ("SELECT", "WITH") or "RETURNING" in adapted.upper():
+            return _PgCursorAdapter(cur)
+        cur.close()
+        return _PgNoopCursor()
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+    def executescript(self, script):
+        raise RuntimeError("executescript is SQLite-only")
+
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(app.config["DATABASE"])
-        g.db.row_factory = sqlite3.Row
+        if USE_POSTGRES:
+            raw = psycopg2.connect(_normalize_postgres_url(_database_url()))
+            g.db = PostgresConnAdapter(raw)
+        else:
+            raw = sqlite3.connect(app.config["DATABASE"])
+            raw.row_factory = sqlite3.Row
+            g.db = SqliteConnAdapter(raw)
     return g.db
 
 
@@ -53,9 +176,23 @@ def close_db(_exception):
 
 
 def ensure_column(db, table_name, column_name, alter_sql):
-    cols = db.execute(f"PRAGMA table_info({table_name})").fetchall()
-    if column_name not in [c["name"] for c in cols]:
-        db.execute(alter_sql)
+    if USE_POSTGRES:
+        exists = db.execute(
+            """
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = ?
+              AND column_name = ?
+            LIMIT 1
+            """,
+            (table_name, column_name),
+        ).fetchone()
+        if not exists:
+            db.execute(alter_sql)
+    else:
+        cols = db.execute(f"PRAGMA table_info({table_name})").fetchall()
+        if column_name not in [c["name"] for c in cols]:
+            db.execute(alter_sql)
 
 
 def minutes_to_pay_hours(total_minutes):
@@ -211,109 +348,26 @@ def build_month_calendar(year, month, shifts_by_date, selected_date):
     return weeks
 
 
+def build_comment_author_aliases(comments_rows):
+    """게시글 내 댓글 작성자별로 익명1, 익명2 … 번호를 안정적으로 부여 (첫 댓글 시각 순)."""
+    ordered = sorted(comments_rows, key=lambda r: r["created_at"])
+    aliases = {}
+    n = 0
+    for row in ordered:
+        aid = row["author_id"]
+        if aid not in aliases:
+            n += 1
+            aliases[aid] = n
+    return aliases
+
+
 def init_db():
     db = get_db()
-    db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            full_name TEXT NOT NULL DEFAULT '',
-            email TEXT NOT NULL DEFAULT '',
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK (role IN ('admin', 'staff')),
-            must_change_password INTEGER NOT NULL DEFAULT 1,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            approval_status TEXT NOT NULL DEFAULT 'approved' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
-            approved_by INTEGER,
-            approved_at TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(approved_by) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS shifts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            staff_id INTEGER NOT NULL,
-            work_date TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
-            note TEXT,
-            created_by INTEGER NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(staff_id) REFERENCES users(id),
-            FOREIGN KEY(created_by) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS work_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            staff_id INTEGER NOT NULL,
-            work_date TEXT NOT NULL,
-            clock_in TEXT NOT NULL,
-            clock_out TEXT NOT NULL,
-            total_minutes INTEGER NOT NULL,
-            note TEXT,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
-            reviewed_by INTEGER,
-            reviewed_at TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(staff_id) REFERENCES users(id),
-            FOREIGN KEY(reviewed_by) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS availability_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            staff_id INTEGER NOT NULL,
-            request_type TEXT NOT NULL CHECK (request_type IN ('preferred_weekday', 'day_off')),
-            weekday INTEGER,
-            request_date TEXT,
-            note TEXT,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(staff_id) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            actor_id INTEGER NOT NULL,
-            action TEXT NOT NULL,
-            details TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(actor_id) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS board_posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            author_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            image_path TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(author_id) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS board_comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER NOT NULL,
-            author_id INTEGER NOT NULL,
-            parent_comment_id INTEGER,
-            content TEXT NOT NULL,
-            image_path TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(post_id) REFERENCES board_posts(id),
-            FOREIGN KEY(author_id) REFERENCES users(id),
-            FOREIGN KEY(parent_comment_id) REFERENCES board_comments(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS notices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            author_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(author_id) REFERENCES users(id)
-        );
-        """
-    )
+    if USE_POSTGRES:
+        for stmt in PG_INIT_STATEMENTS:
+            db.execute(stmt)
+    else:
+        db.executescript(SQLITE_CREATE_SCRIPT)
 
     ensure_column(db, "users", "full_name", "ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
     ensure_column(db, "users", "email", "ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
@@ -333,10 +387,9 @@ def init_db():
         """
         UPDATE users
         SET is_deleted = 1, is_active = 0
-        WHERE role = 'staff' AND (
-            full_name LIKE '%(삭제됨)%' OR username LIKE '%_deleted_%'
-        )
-        """
+        WHERE role = 'staff' AND (full_name LIKE ? OR username LIKE ?)
+        """,
+        ("%(삭제됨)%", "%_deleted_%"),
     )
 
     admin = db.execute("SELECT id FROM users WHERE username = ?", ("admin",)).fetchone()
@@ -434,7 +487,7 @@ def register():
             db.commit()
             flash("회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.")
             return redirect(url_for("login"))
-        except sqlite3.IntegrityError:
+        except DBIntegrityError:
             flash("이미 존재하는 아이디입니다.")
             return redirect(url_for("register"))
 
@@ -767,7 +820,7 @@ def create_staff():
                 f"{full_name}님 계정이 생성되었습니다.\n아이디: {username}\n임시 비밀번호: {temp_password}\n로그인 후 비밀번호를 변경해 주세요.",
             )
         flash("알바 계정이 생성되었습니다.")
-    except sqlite3.IntegrityError:
+    except DBIntegrityError:
         flash("이미 존재하는 아이디입니다.")
 
     return redirect(url_for("admin_dashboard"))
@@ -1324,11 +1377,13 @@ def board_detail(post_id):
     for c in comments:
         if c["parent_comment_id"] is not None:
             replies_by_parent.setdefault(c["parent_comment_id"], []).append(c)
+    comment_author_alias = build_comment_author_aliases(comments)
     return render_template(
         "board_detail.html",
         post=post,
         parent_comments=parent_comments,
         replies_by_parent=replies_by_parent,
+        comment_author_alias=comment_author_alias,
     )
 
 

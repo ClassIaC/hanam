@@ -33,7 +33,7 @@
     {% for c in parent_comments %}
     <article class="board-comment-item">
       <div class="board-comment-head">
-        <strong>익명</strong>
+        <strong>익명{{ comment_author_alias[c['author_id']] }}</strong>
         <span>{{ c['created_at'][:16].replace('T', ' ') }}</span>
       </div>
       <p class="board-content">{{ c['content'] }}</p>
@@ -69,7 +69,7 @@
         {% for r in replies %}
         <article class="board-reply-item">
           <div class="board-comment-head">
-            <strong>익명</strong>
+            <strong>익명{{ comment_author_alias[r['author_id']] }}</strong>
             <span>{{ r['created_at'][:16].replace('T', ' ') }}</span>
           </div>
           <p class="board-content">{{ r['content'] }}</p>

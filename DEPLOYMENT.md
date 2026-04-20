@@ -15,10 +15,17 @@
    - `SECRET_KEY`: 임의의 긴 문자열
    - `DATABASE_URL`: Supabase Postgres URL (추후 DB 전환 시 사용)
 
-## 3) 현재 코드 DB 관련 참고
-- 현재 코드는 기본적으로 SQLite(`hanam.db`)를 사용합니다.
-- 외부 호스팅에서는 파일 DB가 재시작 시 유실될 수 있으므로,
-  운영 전에는 Postgres 연결 코드로 전환하는 것을 권장합니다.
+## 3) DB (Supabase Postgres)
+- Render에 `DATABASE_URL`을 넣으면 **Supabase(Postgres)** 로 연결됩니다. (Supabase 대시보드의 `postgresql://...` 연결 문자열)
+- `DATABASE_URL`이 비어 있으면 로컬 개발용으로 **SQLite(`hanam.db`)** 를 사용합니다.
+- 연결 문자열이 `postgres://` 로 시작하면 앱에서 자동으로 `postgresql://` 로 바꿉니다.
+
+### 이미지(첨부파일) 운영 권장
+- Render 무료 인스턴스는 **디스크가 비영구**일 수 있어, `static/uploads`에만 두면 재배포 시 사라질 수 있습니다.
+- 실서비스에서는 아래 중 하나를 권장합니다.
+  - **Supabase Storage** 버킷에 업로드하고 URL만 DB에 저장 (무료 티어와 잘 맞음)
+  - **Cloudflare R2 / S3** 등 객체 스토리지 + 공개 URL
+- 당장은 로컬·SQLite로 테스트하고, 배포 시 스토리지 연동을 추가하는 방식이 안전합니다.
 
 ## 4) 운영 체크리스트
 - 관리자 비밀번호 즉시 변경

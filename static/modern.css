@@ -16,3 +16,11 @@ button{border-radius:10px}
 .board-image{max-width:100%;border-radius:10px;border:1px solid #e2e8f0;margin:8px 0 12px}
 .board-comment-image-wrap{margin-top:8px}
 .board-comment-image{max-width:220px;border-radius:8px;border:1px solid #e2e8f0}
+.board-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.btn-sm{width:auto;padding:8px 12px;font-size:13px;border-radius:8px}
+.board-list{display:grid;gap:8px}
+.board-item{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;background:#fff}
+.board-item-title{display:block;color:#0f172a;text-decoration:none;font-weight:700;font-size:15px}
+.board-item-title:hover{color:#1d4ed8}
+.board-item-meta{margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;color:#64748b;font-size:12px}
+.write-summary{cursor:pointer;font-weight:700;margin-bottom:10px;color:#0f172a}

@@ -27,6 +27,8 @@
     <form method="post" action="{{ url_for('create_staff') }}" class="form-grid">
       <label>이름</label>
       <input name="full_name" required />
+      <label>이메일 (알림 수신용)</label>
+      <input name="email" type="email" />
       <label>아이디</label>
       <input name="username" required />
       <label>초기 비밀번호</label>
@@ -69,12 +71,13 @@
   <h2>직원 목록</h2>
   <table>
     <thead>
-      <tr><th>이름</th><th>상태</th><th>계정 처리</th></tr>
+      <tr><th>이름</th><th>이메일</th><th>상태</th><th>계정 처리</th></tr>
     </thead>
     <tbody>
       {% for s in staff_list %}
       <tr>
         <td>{{ s['full_name'] }}</td>
+        <td>{{ s['email'] or '-' }}</td>
         <td>
           {% if s['approval_status'] == 'pending' %}
           <span class="status-badge pending">승인 대기</span>

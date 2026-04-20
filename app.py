@@ -4,6 +4,9 @@ import sqlite3
 from functools import wraps
 import csv
 import io
+import os
+import smtplib
+from email.message import EmailMessage
 
 from flask import Flask, g, redirect, render_template, request, session, url_for, flash, Response
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -12,6 +15,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-this-in-production"
 app.config["DATABASE"] = "hanam.db"
+app.config["SMTP_HOST"] = os.getenv("SMTP_HOST", "")
+app.config["SMTP_PORT"] = int(os.getenv("SMTP_PORT", "587"))
+app.config["SMTP_USER"] = os.getenv("SMTP_USER", "")
+app.config["SMTP_PASSWORD"] = os.getenv("SMTP_PASSWORD", "")
+app.config["SMTP_FROM"] = os.getenv("SMTP_FROM", "")
 WEEKDAY_OPTIONS = [
     ("0", "월요일"),
     ("1", "화요일"),
@@ -105,6 +113,47 @@ def write_audit_log(action, details):
     db.commit()
 
 
+def send_email_notification(to_email, subject, body):
+    if not to_email:
+        return False
+    host = app.config["SMTP_HOST"]
+    port = app.config["SMTP_PORT"]
+    user = app.config["SMTP_USER"]
+    password = app.config["SMTP_PASSWORD"]
+    sender = app.config["SMTP_FROM"] or user
+    if not (host and user and password and sender):
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as server:
+            server.starttls()
+            server.login(user, password)
+            server.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
+def notify_staff_by_id(staff_id, subject, body):
+    db = get_db()
+    staff = db.execute(
+        "SELECT full_name, email FROM users WHERE id = ? AND role = 'staff' AND is_deleted = 0",
+        (staff_id,),
+    ).fetchone()
+    if not staff or not staff["email"]:
+        return False
+    sent = send_email_notification(staff["email"], subject, body)
+    if sent:
+        write_audit_log("email.sent", f"to={staff['email']}, subject={subject}")
+    return sent
+
+
 def build_month_calendar(year, month, shifts_by_date, selected_date):
     first_weekday, last_day = calendar.monthrange(year, month)
     weeks = []
@@ -137,6 +186,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             full_name TEXT NOT NULL DEFAULT '',
+            email TEXT NOT NULL DEFAULT '',
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL CHECK (role IN ('admin', 'staff')),
             must_change_password INTEGER NOT NULL DEFAULT 1,
@@ -201,6 +251,7 @@ def init_db():
     )
 
     ensure_column(db, "users", "full_name", "ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
+    ensure_column(db, "users", "email", "ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
     ensure_column(
         db,
         "users",
@@ -291,9 +342,13 @@ def register():
     if request.method == "POST":
         username = request.form["username"].strip()
         full_name = request.form["full_name"].strip()
+        email = request.form.get("email", "").strip()
         password = request.form["password"]
         if len(username) < 3 or len(full_name) < 2 or len(password) < 8:
             flash("아이디 3자 이상, 이름 2자 이상, 비밀번호 8자 이상으로 입력해 주세요.")
+            return redirect(url_for("register"))
+        if email and "@" not in email:
+            flash("이메일 형식이 올바르지 않습니다.")
             return redirect(url_for("register"))
 
         db = get_db()
@@ -301,12 +356,12 @@ def register():
             db.execute(
                 """
                 INSERT INTO users (
-                    username, full_name, password_hash, role, must_change_password,
+                    username, full_name, email, password_hash, role, must_change_password,
                     is_active, approval_status, is_deleted, created_at
                 )
-                VALUES (?, ?, ?, 'staff', 0, 0, 'pending', 0, ?)
+                VALUES (?, ?, ?, ?, 'staff', 0, 0, 'pending', 0, ?)
                 """,
-                (username, full_name, generate_password_hash(password), datetime.now().isoformat()),
+                (username, full_name, email, generate_password_hash(password), datetime.now().isoformat()),
             )
             db.commit()
             flash("회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.")
@@ -400,7 +455,7 @@ def admin_dashboard():
     db = get_db()
     staff_list = db.execute(
         """
-        SELECT id, username, full_name, is_active, approval_status
+        SELECT id, username, full_name, email, is_active, approval_status
         FROM users
         WHERE role = 'staff' AND is_deleted = 0
         ORDER BY full_name, username
@@ -542,10 +597,14 @@ def admin_calendar():
 def create_staff():
     username = request.form["username"].strip()
     full_name = request.form["full_name"].strip()
+    email = request.form.get("email", "").strip()
     temp_password = request.form["temp_password"]
 
     if len(username) < 3 or len(full_name) < 2 or len(temp_password) < 8:
         flash("아이디 3자 이상, 이름 2자 이상, 초기 비밀번호 8자 이상이어야 합니다.")
+        return redirect(url_for("admin_dashboard"))
+    if email and "@" not in email:
+        flash("이메일 형식이 올바르지 않습니다.")
         return redirect(url_for("admin_dashboard"))
 
     db = get_db()
@@ -553,14 +612,15 @@ def create_staff():
         db.execute(
             """
             INSERT INTO users (
-                username, full_name, password_hash, role, must_change_password,
+                username, full_name, email, password_hash, role, must_change_password,
                 is_active, approval_status, approved_by, approved_at, is_deleted, created_at
             )
-            VALUES (?, ?, ?, 'staff', 1, 1, 'approved', ?, ?, 0, ?)
+            VALUES (?, ?, ?, ?, 'staff', 1, 1, 'approved', ?, ?, 0, ?)
             """,
             (
                 username,
                 full_name,
+                email,
                 generate_password_hash(temp_password),
                 session["user_id"],
                 datetime.now().isoformat(),
@@ -569,6 +629,12 @@ def create_staff():
         )
         db.commit()
         write_audit_log("staff.create", f"{full_name}({username}) 계정 생성")
+        if email:
+            send_email_notification(
+                email,
+                "[하남 근무관리] 계정 생성 안내",
+                f"{full_name}님 계정이 생성되었습니다.\n아이디: {username}\n임시 비밀번호: {temp_password}\n로그인 후 비밀번호를 변경해 주세요.",
+            )
         flash("알바 계정이 생성되었습니다.")
     except sqlite3.IntegrityError:
         flash("이미 존재하는 아이디입니다.")
@@ -591,6 +657,11 @@ def approve_staff(staff_id):
     )
     db.commit()
     write_audit_log("staff.approve", f"staff_id={staff_id} 승인")
+    notify_staff_by_id(
+        staff_id,
+        "[하남 근무관리] 가입 승인 완료",
+        "가입이 승인되었습니다. 로그인 후 근무일정과 근무기록을 확인해 주세요.",
+    )
     flash("직원 계정이 승인되었습니다.")
     return redirect(url_for("admin_dashboard"))
 
@@ -610,6 +681,11 @@ def reject_staff(staff_id):
     )
     db.commit()
     write_audit_log("staff.reject", f"staff_id={staff_id} 반려")
+    notify_staff_by_id(
+        staff_id,
+        "[하남 근무관리] 가입 요청 반려",
+        "가입 요청이 반려되었습니다. 관리자에게 문의해 주세요.",
+    )
     flash("직원 계정 가입 요청을 반려했습니다.")
     return redirect(url_for("admin_dashboard"))
 
@@ -677,6 +753,11 @@ def reset_staff_password(staff_id):
     )
     db.commit()
     write_audit_log("staff.password_reset", f"staff_id={staff_id} 비밀번호 초기화")
+    notify_staff_by_id(
+        staff_id,
+        "[하남 근무관리] 비밀번호 초기화 안내",
+        f"비밀번호가 초기화되었습니다.\n임시 비밀번호: {temp_password}\n다음 로그인 시 비밀번호 변경이 필요합니다.",
+    )
     flash(f"{staff['full_name']} 계정 비밀번호가 초기화되었습니다. 다음 로그인 시 변경됩니다.")
     return redirect(url_for("admin_dashboard"))
 
@@ -749,6 +830,11 @@ def create_shift():
     )
     db.commit()
     write_audit_log("shift.create", f"staff_id={staff_id}, date={work_date}, {start_time}-{end_time}")
+    notify_staff_by_id(
+        staff_id,
+        "[하남 근무관리] 스케줄 등록 안내",
+        f"근무 스케줄이 등록되었습니다.\n날짜: {work_date}\n시간: {start_time}~{end_time}",
+    )
     flash("근무 스케줄이 등록되었습니다.")
     return redirect(url_for("admin_dashboard"))
 

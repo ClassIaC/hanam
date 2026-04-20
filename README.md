@@ -54,6 +54,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\auto_commit_push.ps1 -Interva
 - 기본 커밋 메시지: `auto: sync changes (시간)`
 - `hanam.db`는 자동 커밋에서 제외
 - 중지: `Ctrl + C`
+
+## 이메일 알림 설정 (선택)
+직원 이메일 알림을 사용하려면 Render 환경변수에 아래 값을 추가합니다.
+
+- `SMTP_HOST` (예: smtp.gmail.com)
+- `SMTP_PORT` (보통 587)
+- `SMTP_USER` (발신 계정)
+- `SMTP_PASSWORD` (앱 비밀번호 권장)
+- `SMTP_FROM` (표시 발신 주소, 비우면 SMTP_USER 사용)
+
+알림 발송 이벤트:
+- 직원 가입 승인/반려
+- 관리자 계정 생성 시 안내
+- 비밀번호 초기화
+- 스케줄 등록
 # 하남돼지 근무관리 MVP (웹)
 
 관리자/알바 계정을 분리해 스케줄과 근무기록을 관리하는 Flask 기반 반응형 웹입니다.

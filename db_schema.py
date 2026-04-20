@@ -98,6 +98,17 @@ SQLITE_CREATE_SCRIPT = """
             created_at TEXT NOT NULL,
             FOREIGN KEY(author_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS manuals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(author_id) REFERENCES users(id)
+        );
 """
 
 PG_INIT_STATEMENTS = [
@@ -193,6 +204,17 @@ PG_INIT_STATEMENTS = [
         title TEXT NOT NULL,
         content TEXT NOT NULL,
         created_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS manuals (
+        id SERIAL PRIMARY KEY,
+        author_id INTEGER NOT NULL REFERENCES users(id),
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
     );
     """,
 ]

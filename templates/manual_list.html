@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>하남돼지집 매뉴얼</h2>
+  <p class="help">매장 운영 매뉴얼입니다. 일반 직원은 열람만 가능하며, 관리자가 항목을 추가/수정/삭제할 수 있습니다.</p>
+</section>
+
+{% if session.get('role') == 'admin' %}
+<section class="card">
+  <h2>매뉴얼 항목 추가</h2>
+  <form method="post" action="{{ url_for('create_manual') }}" class="form-grid">
+    <label>제목</label>
+    <input name="title" minlength="2" required />
+    <label>내용</label>
+    <textarea name="content" rows="6" minlength="2" required></textarea>
+    <label>정렬 번호 (작을수록 위로)</label>
+    <input name="sort_order" type="number" value="0" />
+    <button type="submit">항목 등록</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>매뉴얼 목록</h2>
+  {% if manuals %}
+  <div class="notice-list">
+    {% for m in manuals %}
+    <a class="notice-item" href="{{ url_for('manual_detail', manual_id=m['id']) }}">
+      <strong>{{ m['sort_order'] }}. {{ m['title'] }}</strong>
+      <span>최근 수정: {{ m['updated_at'][:16].replace('T', ' ') }} / 작성: {{ m['author_name'] }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>아직 등록된 매뉴얼 항목이 없습니다.</p>
+  {% endif %}
+</section>
+{% endblock %}

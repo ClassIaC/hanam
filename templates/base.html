@@ -29,10 +29,12 @@
         <a href="{{ url_for('admin_dashboard') }}">대시보드</a>
         <a href="{{ url_for('admin_calendar') }}">캘린더</a>
         <a href="{{ url_for('notice_list') }}">공지사항</a>
+        <a href="{{ url_for('manual_list') }}">매뉴얼</a>
         <a href="{{ url_for('board_list') }}">익명 게시판</a>
         {% else %}
         <a href="{{ url_for('staff_dashboard') }}">내 근무</a>
         <a href="{{ url_for('notice_list') }}">공지사항</a>
+        <a href="{{ url_for('manual_list') }}">매뉴얼</a>
         <a href="{{ url_for('board_list') }}">익명 게시판</a>
         {% endif %}
       </nav>

@@ -486,6 +486,29 @@ def inject_today_date():
     }
 
 
+@app.before_request
+def _start_timer():
+    g._req_started_at = datetime.now()
+
+
+@app.after_request
+def _log_request_time(response):
+    try:
+        started = getattr(g, "_req_started_at", None)
+        if started is not None:
+            ms = int((datetime.now() - started).total_seconds() * 1000)
+            app.logger.info(
+                "[timing] %s %s %s %dms",
+                request.method,
+                request.path,
+                response.status_code,
+                ms,
+            )
+    except Exception:
+        pass
+    return response
+
+
 @app.route("/")
 def index():
     if "user_id" in session:
@@ -1526,6 +1549,114 @@ def notice_detail(notice_id):
         flash("공지사항을 찾을 수 없습니다.")
         return redirect(url_for("notice_list"))
     return render_template("notice_detail.html", notice=notice)
+
+
+@app.route("/manual")
+@login_required
+def manual_list():
+    db = get_db()
+    manuals = db.execute(
+        """
+        SELECT m.id, m.title, m.content, m.sort_order, m.created_at, m.updated_at,
+               u.full_name AS author_name
+        FROM manuals m
+        JOIN users u ON u.id = m.author_id
+        ORDER BY m.sort_order ASC, m.id ASC
+        """
+    ).fetchall()
+    return render_template("manual_list.html", manuals=manuals)
+
+
+@app.route("/manual/new", methods=["POST"])
+@login_required
+@role_required("admin")
+def create_manual():
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+    sort_order_raw = request.form.get("sort_order", "0").strip() or "0"
+    try:
+        sort_order = int(sort_order_raw)
+    except ValueError:
+        sort_order = 0
+    if len(title) < 2 or len(content) < 2:
+        flash("매뉴얼 제목/내용을 2자 이상 입력해 주세요.")
+        return redirect(url_for("manual_list"))
+
+    now_iso = datetime.now().isoformat()
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO manuals (author_id, title, content, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (session["user_id"], title, content, sort_order, now_iso, now_iso),
+    )
+    db.commit()
+    write_audit_log("manual.create", f"title={title}")
+    flash("매뉴얼 항목이 등록되었습니다.")
+    return redirect(url_for("manual_list"))
+
+
+@app.route("/manual/<int:manual_id>")
+@login_required
+def manual_detail(manual_id):
+    db = get_db()
+    manual = db.execute(
+        """
+        SELECT m.id, m.title, m.content, m.sort_order, m.created_at, m.updated_at,
+               u.full_name AS author_name
+        FROM manuals m
+        JOIN users u ON u.id = m.author_id
+        WHERE m.id = ?
+        """,
+        (manual_id,),
+    ).fetchone()
+    if not manual:
+        flash("매뉴얼 항목을 찾을 수 없습니다.")
+        return redirect(url_for("manual_list"))
+    return render_template("manual_detail.html", manual=manual)
+
+
+@app.route("/manual/<int:manual_id>/edit", methods=["POST"])
+@login_required
+@role_required("admin")
+def update_manual(manual_id):
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+    sort_order_raw = request.form.get("sort_order", "0").strip() or "0"
+    try:
+        sort_order = int(sort_order_raw)
+    except ValueError:
+        sort_order = 0
+    if len(title) < 2 or len(content) < 2:
+        flash("매뉴얼 제목/내용을 2자 이상 입력해 주세요.")
+        return redirect(url_for("manual_detail", manual_id=manual_id))
+
+    db = get_db()
+    db.execute(
+        """
+        UPDATE manuals
+        SET title = ?, content = ?, sort_order = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (title, content, sort_order, datetime.now().isoformat(), manual_id),
+    )
+    db.commit()
+    write_audit_log("manual.update", f"manual_id={manual_id} title={title}")
+    flash("매뉴얼 항목이 수정되었습니다.")
+    return redirect(url_for("manual_detail", manual_id=manual_id))
+
+
+@app.route("/manual/<int:manual_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def delete_manual(manual_id):
+    db = get_db()
+    db.execute("DELETE FROM manuals WHERE id = ?", (manual_id,))
+    db.commit()
+    write_audit_log("manual.delete", f"manual_id={manual_id}")
+    flash("매뉴얼 항목이 삭제되었습니다.")
+    return redirect(url_for("manual_list"))
 
 
 @app.route("/board/<int:post_id>/delete", methods=["POST"])

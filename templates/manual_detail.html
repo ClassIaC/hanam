@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <a class="link" href="{{ url_for('manual_list') }}">← 매뉴얼 목록으로</a>
+  <h2>{{ manual['title'] }}</h2>
+  <p class="help">
+    작성: {{ manual['author_name'] }} ·
+    등록 {{ manual['created_at'][:16].replace('T', ' ') }} ·
+    최근 수정 {{ manual['updated_at'][:16].replace('T', ' ') }} ·
+    정렬 {{ manual['sort_order'] }}
+  </p>
+  <p class="board-content">{{ manual['content'] }}</p>
+</section>
+
+{% if session.get('role') == 'admin' %}
+<section class="card">
+  <h2>매뉴얼 수정</h2>
+  <form method="post" action="{{ url_for('update_manual', manual_id=manual['id']) }}" class="form-grid">
+    <label>제목</label>
+    <input name="title" minlength="2" required value="{{ manual['title'] }}" />
+    <label>내용</label>
+    <textarea name="content" rows="8" minlength="2" required>{{ manual['content'] }}</textarea>
+    <label>정렬 번호</label>
+    <input name="sort_order" type="number" value="{{ manual['sort_order'] }}" />
+    <button type="submit">수정 저장</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>삭제</h2>
+  <form method="post" action="{{ url_for('delete_manual', manual_id=manual['id']) }}" onsubmit="return confirm('이 매뉴얼 항목을 삭제하시겠습니까?');">
+    <button type="submit" class="btn-danger">매뉴얼 항목 삭제</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

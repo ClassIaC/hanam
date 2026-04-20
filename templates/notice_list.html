@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>공지사항</h2>
+  <p class="help">일반 직원은 열람만 가능하며, 공지 작성은 관리자만 가능합니다.</p>
+</section>
+
+{% if session.get('role') == 'admin' %}
+<section class="card">
+  <h2>공지 작성</h2>
+  <form method="post" action="{{ url_for('create_notice') }}" class="form-grid">
+    <label>제목</label>
+    <input name="title" minlength="2" required />
+    <label>내용</label>
+    <textarea name="content" rows="5" minlength="2" required></textarea>
+    <button type="submit">공지 등록</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>공지 목록</h2>
+  {% if notices %}
+  <div class="notice-list">
+    {% for n in notices %}
+    <a class="notice-item" href="{{ url_for('notice_detail', notice_id=n['id']) }}">
+      <strong>{{ n['title'] }}</strong>
+      <span>작성: {{ n['author_name'] }} / {{ n['created_at'][:16].replace('T', ' ') }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>등록된 공지사항이 없습니다.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -93,6 +93,11 @@
               <input type="password" name="temp_password" minlength="8" placeholder="임시 비밀번호" required />
               <button type="submit" class="btn-secondary">비번 초기화</button>
             </form>
+            {% if s['role'] != 'admin' %}
+            <form method="post" action="{{ url_for('grant_admin_role', staff_id=s['id']) }}" onsubmit="return confirm('해당 직원에게 관리자 권한을 부여하시겠습니까?');">
+              <button type="submit">관리자 권한 부여</button>
+            </form>
+            {% endif %}
             <form method="post" action="{{ url_for('delete_staff', staff_id=s['id']) }}" onsubmit="return confirm('정말 삭제하시겠습니까? 삭제 후 목록에서 사라집니다.');">
               <button type="submit" class="btn-danger">삭제 처리</button>
             </form>

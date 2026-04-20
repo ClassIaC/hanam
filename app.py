@@ -301,6 +301,15 @@ def init_db():
             FOREIGN KEY(post_id) REFERENCES board_posts(id),
             FOREIGN KEY(author_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS notices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(author_id) REFERENCES users(id)
+        );
         """
     )
 
@@ -574,7 +583,7 @@ def admin_dashboard():
     db = get_db()
     staff_list = db.execute(
         """
-        SELECT id, username, full_name, email, is_active, approval_status
+        SELECT id, username, full_name, email, role, is_active, approval_status
         FROM users
         WHERE role = 'staff' AND is_deleted = 0
         ORDER BY full_name, username
@@ -878,6 +887,40 @@ def reset_staff_password(staff_id):
         f"비밀번호가 초기화되었습니다.\n임시 비밀번호: {temp_password}\n다음 로그인 시 비밀번호 변경이 필요합니다.",
     )
     flash(f"{staff['full_name']} 계정 비밀번호가 초기화되었습니다. 다음 로그인 시 변경됩니다.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/staff/<int:staff_id>/grant-admin", methods=["POST"])
+@login_required
+@role_required("admin")
+def grant_admin_role(staff_id):
+    db = get_db()
+    staff = db.execute(
+        """
+        SELECT id, full_name, role, is_deleted
+        FROM users
+        WHERE id = ?
+        """,
+        (staff_id,),
+    ).fetchone()
+    if not staff or staff["is_deleted"] == 1:
+        flash("권한을 부여할 계정을 찾을 수 없습니다.")
+        return redirect(url_for("admin_dashboard"))
+    if staff["role"] == "admin":
+        flash("이미 관리자 권한을 가진 계정입니다.")
+        return redirect(url_for("admin_dashboard"))
+
+    db.execute(
+        """
+        UPDATE users
+        SET role = 'admin', approval_status = 'approved', is_active = 1
+        WHERE id = ?
+        """,
+        (staff_id,),
+    )
+    db.commit()
+    write_audit_log("staff.grant_admin", f"user_id={staff_id} 관리자 권한 부여")
+    flash(f"{staff['full_name']} 계정에 관리자 권한을 부여했습니다.")
     return redirect(url_for("admin_dashboard"))
 
 
@@ -1305,6 +1348,65 @@ def create_board_comment(post_id):
     write_audit_log("board.comment.create", f"post_id={post_id}")
     flash("익명 댓글이 등록되었습니다.")
     return redirect(url_for("board_detail", post_id=post_id))
+
+
+@app.route("/notices")
+@login_required
+def notice_list():
+    db = get_db()
+    notices = db.execute(
+        """
+        SELECT n.id, n.title, n.content, n.created_at, u.full_name AS author_name
+        FROM notices n
+        JOIN users u ON u.id = n.author_id
+        ORDER BY n.created_at DESC
+        LIMIT 100
+        """
+    ).fetchall()
+    return render_template("notice_list.html", notices=notices)
+
+
+@app.route("/notices/new", methods=["POST"])
+@login_required
+@role_required("admin")
+def create_notice():
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+    if len(title) < 2 or len(content) < 2:
+        flash("공지 제목/내용을 2자 이상 입력해 주세요.")
+        return redirect(url_for("notice_list"))
+
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO notices (author_id, title, content, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (session["user_id"], title, content, datetime.now().isoformat()),
+    )
+    db.commit()
+    write_audit_log("notice.create", f"title={title}")
+    flash("공지사항이 등록되었습니다.")
+    return redirect(url_for("notice_list"))
+
+
+@app.route("/notices/<int:notice_id>")
+@login_required
+def notice_detail(notice_id):
+    db = get_db()
+    notice = db.execute(
+        """
+        SELECT n.id, n.title, n.content, n.created_at, u.full_name AS author_name
+        FROM notices n
+        JOIN users u ON u.id = n.author_id
+        WHERE n.id = ?
+        """,
+        (notice_id,),
+    ).fetchone()
+    if not notice:
+        flash("공지사항을 찾을 수 없습니다.")
+        return redirect(url_for("notice_list"))
+    return render_template("notice_detail.html", notice=notice)
 
 
 @app.route("/board/<int:post_id>/delete", methods=["POST"])

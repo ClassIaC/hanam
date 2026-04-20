@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <a class="link" href="{{ url_for('notice_list') }}">← 공지 목록으로</a>
+  <h2>{{ notice['title'] }}</h2>
+  <p class="help">작성: {{ notice['author_name'] }} / {{ notice['created_at'][:16].replace('T', ' ') }}</p>
+  <p class="board-content">{{ notice['content'] }}</p>
+</section>
+{% endblock %}

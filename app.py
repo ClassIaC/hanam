@@ -534,6 +534,128 @@ def init_db():
             """
         )
     db.commit()
+    seed_default_manuals()
+
+
+DEFAULT_MANUALS = [
+    (
+        10,
+        "오픈 준비 (10:30 ~ 12:00)",
+        "1. 매장 전체 조명/에어컨/환풍기 ON\n"
+        "2. 테이블, 의자, 바닥 닦기 및 소독\n"
+        "3. 수저통/앞접시/집게/가위 셋팅 및 수량 확인\n"
+        "4. 반찬 냉장고 상태 체크, 부족분 리필\n"
+        "5. 숯불/그릴/가스 점검 및 환기 확인\n"
+        "6. POS 시스템/결제기 로그인, 프린터 용지 확인\n"
+        "7. 화장실 휴지/비누/청결 점검\n"
+        "8. 입간판/메뉴판 세팅, 외부 청소",
+    ),
+    (
+        20,
+        "홀 서비스 기본",
+        "• 손님 입장 시 '어서오세요, 하남돼지집입니다' 라고 밝게 인사\n"
+        "• 인원 확인 후 테이블 안내, 물과 물수건 즉시 제공\n"
+        "• 메뉴 주문은 POS에 바로 입력하고 주방에 전달\n"
+        "• 고기는 1인분 단위가 아닌 '주문 수량 기준'으로 서빙\n"
+        "• 불판 교체 타이밍: 숯이 사그라들거나 기름이 많이 튈 때 선제 교체\n"
+        "• 반찬은 비면 바로 리필 (손님이 요청하기 전에)\n"
+        "• 계산 시 '맛있게 드셨어요?' 한 마디 + 재방문 인사",
+    ),
+    (
+        30,
+        "주방/고기 취급 기본",
+        "1. 냉장/냉동 온도 기준: 냉장 0~4℃, 냉동 -18℃ 이하 유지\n"
+        "2. 입고 시 포장 상태, 유통기한 확인 후 선입선출(FIFO) 원칙으로 배치\n"
+        "3. 고기 해동은 냉장해동만 사용 (상온 해동 금지)\n"
+        "4. 도마·칼은 용도별 분리(육류/채소) 사용, 교차오염 방지\n"
+        "5. 숙성고 내부 온도 매일 오전/오후 2회 기록\n"
+        "6. 조리 중 앞치마·위생모·장갑 착용 필수\n"
+        "7. 손 세척: 조리 전, 화장실 이용 후, 다른 식재료 만질 때 매번",
+    ),
+    (
+        40,
+        "마감 절차 (23:00 이후)",
+        "1. 남은 손님 계산 완료 확인\n"
+        "2. 전 테이블·의자 닦기, 바닥 물청소\n"
+        "3. 반찬은 소분 밀폐용기로 옮겨 냉장 보관 (재사용 가능 여부 체크)\n"
+        "4. 불판/그릴/후드 분해 세척\n"
+        "5. 쓰레기/음식물/재활용 분리 배출\n"
+        "6. 냉장고/숙성고 온도 최종 확인 및 기록\n"
+        "7. 시재 정산, 당일 매출 POS에서 마감 처리\n"
+        "8. 가스 밸브 / 전기(일부 제외) / 조명 OFF, 문단속 후 CCTV 확인",
+    ),
+    (
+        50,
+        "위생 및 안전 수칙",
+        "• 근무자 개인 위생: 매일 위생복/앞치마 교체, 손톱 짧게, 반지·시계 제거\n"
+        "• 발열/기침/장염 증상 시 즉시 관리자에게 알리고 출근 금지\n"
+        "• 식중독 의심 징후(설사, 구토 등) 발생 시 해당 직원 격리 후 보고\n"
+        "• 화재 시 1차: 가스 밸브 차단 → 2차: 소화기 사용 → 3차: 119\n"
+        "• 소화기 위치: (예) 카운터 옆, 주방 출입구. 매월 위치/압력 게이지 확인\n"
+        "• 응급처치 키트 위치: 카운터 하단 서랍",
+    ),
+    (
+        60,
+        "고객 응대 / 클레임 대응",
+        "• 불만 접수 시 절대 먼저 반박하지 않고 '불편을 드려 죄송합니다' 부터\n"
+        "• 원인 확인 후 가능한 범위에서 즉시 조치 (재조리, 교환, 서비스 제공)\n"
+        "• 처리 권한을 넘어가는 사항(환불, 전액 보상 등)은 반드시 매니저 호출\n"
+        "• 취객/난동 발생 시 다른 손님 보호 우선, 필요 시 112\n"
+        "• 모든 클레임은 당일 감사 로그/인수인계 노트에 기록",
+    ),
+    (
+        70,
+        "POS / 결제 시스템 기본",
+        "1. 주문 입력 → 테이블 지정 → 주방 프린터 출력 확인\n"
+        "2. 메뉴 변경/취소는 반드시 관리자 권한 카드로 승인\n"
+        "3. 결제 수단: 카드/현금/간편결제. 현금 결제 시 영수증 필수 발급\n"
+        "4. 결제 오류/취소는 결제 승인번호 남기고 재시도\n"
+        "5. 일 마감 시 POS 정산 리포트 출력 후 시재와 대조",
+    ),
+    (
+        80,
+        "긴급 상황 대응",
+        "[화재] 가스 차단 → 손님 대피 유도 → 소화기 → 119\n"
+        "[정전] 카운터 비상전등 ON, 조리 중단, 현금 결제 안내\n"
+        "[부상] 가벼운 상처: 응급키트 사용. 심한 상처/화상: 119 + 관리자 연락\n"
+        "[식중독 의심 민원] 해당 음식/영수증 보관, 본사 보고 후 고객 연락처 확보\n"
+        "[무단 침입·도난] 본인 안전 우선, 즉시 112 신고, CCTV 확인",
+    ),
+]
+
+
+def seed_default_manuals():
+    db = get_db()
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM manuals").fetchone()
+    except Exception:
+        return
+    if not existing:
+        return
+    try:
+        count = existing["c"]
+    except Exception:
+        try:
+            count = existing[0]
+        except Exception:
+            count = 0
+    if count and count > 0:
+        return
+    admin = db.execute(
+        "SELECT id FROM users WHERE role = 'admin' AND is_deleted = 0 ORDER BY id ASC LIMIT 1"
+    ).fetchone()
+    if not admin:
+        return
+    now_iso = datetime.now().isoformat()
+    for sort_order, title, content in DEFAULT_MANUALS:
+        db.execute(
+            """
+            INSERT INTO manuals (author_id, title, content, image_path, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, '', ?, ?, ?)
+            """,
+            (admin["id"], title, content, sort_order, now_iso, now_iso),
+        )
+    db.commit()
 
 
 def login_required(f):
@@ -1635,6 +1757,57 @@ def notice_detail(notice_id):
     return render_template("notice_detail.html", notice=notice)
 
 
+def _collect_manual_images(manual_id):
+    """레거시 image_path + manual_images 를 하나의 리스트로 반환."""
+    db = get_db()
+    manual_row = db.execute(
+        "SELECT image_path FROM manuals WHERE id = ?", (manual_id,)
+    ).fetchone()
+    items = []
+    if manual_row and manual_row["image_path"]:
+        items.append({"id": None, "image_path": manual_row["image_path"], "legacy": True})
+    rows = db.execute(
+        """
+        SELECT id, image_path FROM manual_images
+        WHERE manual_id = ?
+        ORDER BY sort_order ASC, id ASC
+        """,
+        (manual_id,),
+    ).fetchall()
+    for r in rows:
+        items.append({"id": r["id"], "image_path": r["image_path"], "legacy": False})
+    return items
+
+
+def _save_manual_images(manual_id, file_storages):
+    """여러 개의 파일을 manual_images에 순차 저장. 문제가 있으면 False 반환."""
+    now_iso = datetime.now().isoformat()
+    db = get_db()
+    existing_count = db.execute(
+        "SELECT COUNT(*) AS c FROM manual_images WHERE manual_id = ?",
+        (manual_id,),
+    ).fetchone()
+    base_order = (existing_count["c"] if existing_count else 0)
+    order = base_order
+    for fs in file_storages:
+        if not fs or not fs.filename:
+            continue
+        saved = save_uploaded_image(fs)
+        if saved is None:
+            return False
+        if not saved:
+            continue
+        db.execute(
+            """
+            INSERT INTO manual_images (manual_id, image_path, sort_order, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (manual_id, saved, order, now_iso),
+        )
+        order += 1
+    return True
+
+
 @app.route("/manual")
 @login_required
 def manual_list():
@@ -1643,7 +1816,10 @@ def manual_list():
         """
         SELECT m.id, m.title, m.content, m.image_path, m.sort_order,
                m.created_at, m.updated_at,
-               u.full_name AS author_name
+               u.full_name AS author_name,
+               (CASE WHEN m.image_path <> '' THEN 1 ELSE 0 END)
+                 + (SELECT COUNT(*) FROM manual_images mi WHERE mi.manual_id = m.id)
+                 AS image_count
         FROM manuals m
         JOIN users u ON u.id = m.author_id
         ORDER BY m.sort_order ASC, m.id ASC
@@ -1667,20 +1843,31 @@ def create_manual():
         flash("매뉴얼 제목/내용을 2자 이상 입력해 주세요.")
         return redirect(url_for("manual_list"))
 
-    image_path = save_uploaded_image(request.files.get("image"))
-    if image_path is None:
-        flash("허용된 이미지 형식(png, jpg, jpeg, gif, webp)만 업로드할 수 있습니다.")
-        return redirect(url_for("manual_list"))
-
     now_iso = datetime.now().isoformat()
     db = get_db()
-    db.execute(
+    cursor = db.execute(
         """
         INSERT INTO manuals (author_id, title, content, image_path, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, '', ?, ?, ?)
         """,
-        (session["user_id"], title, content, image_path or "", sort_order, now_iso, now_iso),
+        (session["user_id"], title, content, sort_order, now_iso, now_iso),
     )
+    manual_id = getattr(cursor, "lastrowid", None)
+    if manual_id is None:
+        row = db.execute(
+            "SELECT id FROM manuals WHERE author_id = ? ORDER BY id DESC LIMIT 1",
+            (session["user_id"],),
+        ).fetchone()
+        manual_id = row["id"] if row else None
+
+    files = request.files.getlist("images")
+    if manual_id and files:
+        ok = _save_manual_images(manual_id, files)
+        if not ok:
+            db.commit()
+            flash("허용된 이미지 형식(png, jpg, jpeg, gif, webp)만 업로드할 수 있습니다. 나머지 항목은 저장되었습니다.")
+            return redirect(url_for("manual_detail", manual_id=manual_id))
+
     db.commit()
     write_audit_log("manual.create", f"title={title}")
     flash("매뉴얼 항목이 등록되었습니다.")
@@ -1705,7 +1892,8 @@ def manual_detail(manual_id):
     if not manual:
         flash("매뉴얼 항목을 찾을 수 없습니다.")
         return redirect(url_for("manual_list"))
-    return render_template("manual_detail.html", manual=manual)
+    images = _collect_manual_images(manual_id)
+    return render_template("manual_detail.html", manual=manual, images=images)
 
 
 @app.route("/manual/<int:manual_id>/edit", methods=["POST"])
@@ -1732,21 +1920,10 @@ def update_manual(manual_id):
         flash("매뉴얼 항목을 찾을 수 없습니다.")
         return redirect(url_for("manual_list"))
 
-    current_image = existing["image_path"] or ""
-    new_image = save_uploaded_image(request.files.get("image"))
-    if new_image is None:
-        flash("허용된 이미지 형식(png, jpg, jpeg, gif, webp)만 업로드할 수 있습니다.")
-        return redirect(url_for("manual_detail", manual_id=manual_id))
-
-    remove_existing = request.form.get("remove_image") == "1"
-    if new_image:
-        delete_uploaded_image(current_image)
-        image_path = new_image
-    elif remove_existing:
-        delete_uploaded_image(current_image)
-        image_path = ""
-    else:
-        image_path = current_image
+    current_legacy = existing["image_path"] or ""
+    if request.form.get("remove_legacy_image") == "1" and current_legacy:
+        delete_uploaded_image(current_legacy)
+        current_legacy = ""
 
     db.execute(
         """
@@ -1754,11 +1931,43 @@ def update_manual(manual_id):
         SET title = ?, content = ?, image_path = ?, sort_order = ?, updated_at = ?
         WHERE id = ?
         """,
-        (title, content, image_path, sort_order, datetime.now().isoformat(), manual_id),
+        (title, content, current_legacy, sort_order, datetime.now().isoformat(), manual_id),
     )
+
+    files = request.files.getlist("images")
+    if files:
+        ok = _save_manual_images(manual_id, files)
+        if not ok:
+            db.commit()
+            flash("허용된 이미지 형식(png, jpg, jpeg, gif, webp)만 업로드할 수 있습니다. 다른 변경사항은 저장되었습니다.")
+            return redirect(url_for("manual_detail", manual_id=manual_id))
+
     db.commit()
     write_audit_log("manual.update", f"manual_id={manual_id} title={title}")
     flash("매뉴얼 항목이 수정되었습니다.")
+    return redirect(url_for("manual_detail", manual_id=manual_id))
+
+
+@app.route("/manual/<int:manual_id>/images/<int:image_id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def delete_manual_image(manual_id, image_id):
+    db = get_db()
+    row = db.execute(
+        "SELECT image_path FROM manual_images WHERE id = ? AND manual_id = ?",
+        (image_id, manual_id),
+    ).fetchone()
+    if not row:
+        flash("이미지를 찾을 수 없습니다.")
+        return redirect(url_for("manual_detail", manual_id=manual_id))
+    delete_uploaded_image(row["image_path"])
+    db.execute(
+        "DELETE FROM manual_images WHERE id = ? AND manual_id = ?",
+        (image_id, manual_id),
+    )
+    db.commit()
+    write_audit_log("manual.image.delete", f"manual_id={manual_id} image_id={image_id}")
+    flash("이미지가 삭제되었습니다.")
     return redirect(url_for("manual_detail", manual_id=manual_id))
 
 
@@ -1767,12 +1976,19 @@ def update_manual(manual_id):
 @role_required("admin")
 def delete_manual(manual_id):
     db = get_db()
-    existing = db.execute(
+    legacy = db.execute(
         "SELECT image_path FROM manuals WHERE id = ?",
         (manual_id,),
     ).fetchone()
-    if existing:
-        delete_uploaded_image(existing["image_path"])
+    image_rows = db.execute(
+        "SELECT image_path FROM manual_images WHERE manual_id = ?",
+        (manual_id,),
+    ).fetchall()
+    if legacy:
+        delete_uploaded_image(legacy["image_path"])
+    for r in image_rows:
+        delete_uploaded_image(r["image_path"])
+    db.execute("DELETE FROM manual_images WHERE manual_id = ?", (manual_id,))
     db.execute("DELETE FROM manuals WHERE id = ?", (manual_id,))
     db.commit()
     write_audit_log("manual.delete", f"manual_id={manual_id}")

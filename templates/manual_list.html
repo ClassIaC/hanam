@@ -13,8 +13,8 @@
     <input name="title" minlength="2" required />
     <label>내용</label>
     <textarea name="content" rows="6" minlength="2" required></textarea>
-    <label>이미지 (선택, png/jpg/jpeg/gif/webp)</label>
-    <input type="file" name="image" accept="image/*" />
+    <label>이미지 (선택, 여러 장 가능 · png/jpg/jpeg/gif/webp)</label>
+    <input type="file" name="images" accept="image/*" multiple />
     <label>정렬 번호 (작을수록 위로)</label>
     <input name="sort_order" type="number" value="0" />
     <button type="submit">항목 등록</button>
@@ -28,7 +28,10 @@
   <div class="notice-list">
     {% for m in manuals %}
     <a class="notice-item" href="{{ url_for('manual_detail', manual_id=m['id']) }}">
-      <strong>{{ m['sort_order'] }}. {{ m['title'] }}{% if m['image_path'] %} 📷{% endif %}</strong>
+      <strong>
+        {{ m['sort_order'] }}. {{ m['title'] }}
+        {% if m['image_count'] and m['image_count'] > 0 %} 📷 {{ m['image_count'] }}{% endif %}
+      </strong>
       <span>최근 수정: {{ m['updated_at'][:16].replace('T', ' ') }} / 작성: {{ m['author_name'] }}</span>
     </a>
     {% endfor %}

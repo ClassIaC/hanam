@@ -110,6 +110,15 @@ SQLITE_CREATE_SCRIPT = """
             updated_at TEXT NOT NULL,
             FOREIGN KEY(author_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS manual_images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manual_id INTEGER NOT NULL,
+            image_path TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(manual_id) REFERENCES manuals(id) ON DELETE CASCADE
+        );
 """
 
 PG_INIT_STATEMENTS = [
@@ -217,6 +226,15 @@ PG_INIT_STATEMENTS = [
         sort_order INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS manual_images (
+        id SERIAL PRIMARY KEY,
+        manual_id INTEGER NOT NULL REFERENCES manuals(id) ON DELETE CASCADE,
+        image_path TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
     );
     """,
 ]

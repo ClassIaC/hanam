@@ -1818,6 +1818,25 @@ def manual_list():
     return render_template("manual_list.html", manuals=manuals)
 
 
+@app.route("/manual/seed", methods=["POST"])
+@login_required
+@role_required("admin")
+def seed_manual_from_defaults():
+    db = get_db()
+    existing = db.execute("SELECT COUNT(*) AS c FROM manuals").fetchone()
+    try:
+        count = existing["c"] if existing else 0
+    except Exception:
+        count = existing[0] if existing else 0
+    if count and count > 0:
+        flash("이미 매뉴얼 항목이 존재합니다. 모두 삭제한 뒤 다시 시도해주세요.")
+        return redirect(url_for("manual_list"))
+    seed_default_manuals()
+    write_audit_log("manual.seed", "default manuals inserted")
+    flash("기본 매뉴얼 초안이 등록되었습니다. 내용을 확인하고 수정해 주세요.")
+    return redirect(url_for("manual_list"))
+
+
 @app.route("/manual/new", methods=["POST"])
 @login_required
 @role_required("admin")

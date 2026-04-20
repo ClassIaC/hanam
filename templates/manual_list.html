@@ -3,6 +3,12 @@
 <section class="card">
   <h2>하남돼지집 매뉴얼</h2>
   <p class="help">매장 운영 매뉴얼입니다. 일반 직원은 열람만 가능하며, 관리자가 항목을 추가/수정/삭제할 수 있습니다.</p>
+  {% if session.get('role') == 'admin' and (not manuals) %}
+  <form method="post" action="{{ url_for('seed_manual_from_defaults') }}" onsubmit="return confirm('기본 매뉴얼 8개 항목을 일괄 등록할까요?');">
+    <button type="submit">기본 매뉴얼 불러오기</button>
+  </form>
+  <p class="help">오픈/홀/주방/마감/위생/응대/POS/긴급 상황 8개 항목이 초안 형태로 등록됩니다. 이후 필요한 내용으로 수정해 사용하세요.</p>
+  {% endif %}
 </section>
 
 {% if session.get('role') == 'admin' %}

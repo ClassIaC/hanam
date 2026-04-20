@@ -418,6 +418,7 @@ def init_db():
     ensure_column(db, "board_posts", "image_path", "ALTER TABLE board_posts ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
     ensure_column(db, "board_comments", "image_path", "ALTER TABLE board_comments ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
     ensure_column(db, "board_comments", "parent_comment_id", "ALTER TABLE board_comments ADD COLUMN parent_comment_id INTEGER")
+    ensure_column(db, "manuals", "image_path", "ALTER TABLE manuals ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
     db.execute(
         """
         UPDATE users
@@ -1557,7 +1558,8 @@ def manual_list():
     db = get_db()
     manuals = db.execute(
         """
-        SELECT m.id, m.title, m.content, m.sort_order, m.created_at, m.updated_at,
+        SELECT m.id, m.title, m.content, m.image_path, m.sort_order,
+               m.created_at, m.updated_at,
                u.full_name AS author_name
         FROM manuals m
         JOIN users u ON u.id = m.author_id
@@ -1582,14 +1584,19 @@ def create_manual():
         flash("매뉴얼 제목/내용을 2자 이상 입력해 주세요.")
         return redirect(url_for("manual_list"))
 
+    image_path = save_uploaded_image(request.files.get("image"))
+    if image_path is None:
+        flash("허용된 이미지 형식(png, jpg, jpeg, gif, webp)만 업로드할 수 있습니다.")
+        return redirect(url_for("manual_list"))
+
     now_iso = datetime.now().isoformat()
     db = get_db()
     db.execute(
         """
-        INSERT INTO manuals (author_id, title, content, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO manuals (author_id, title, content, image_path, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (session["user_id"], title, content, sort_order, now_iso, now_iso),
+        (session["user_id"], title, content, image_path or "", sort_order, now_iso, now_iso),
     )
     db.commit()
     write_audit_log("manual.create", f"title={title}")
@@ -1603,7 +1610,8 @@ def manual_detail(manual_id):
     db = get_db()
     manual = db.execute(
         """
-        SELECT m.id, m.title, m.content, m.sort_order, m.created_at, m.updated_at,
+        SELECT m.id, m.title, m.content, m.image_path, m.sort_order,
+               m.created_at, m.updated_at,
                u.full_name AS author_name
         FROM manuals m
         JOIN users u ON u.id = m.author_id
@@ -1633,13 +1641,37 @@ def update_manual(manual_id):
         return redirect(url_for("manual_detail", manual_id=manual_id))
 
     db = get_db()
+    existing = db.execute(
+        "SELECT image_path FROM manuals WHERE id = ?",
+        (manual_id,),
+    ).fetchone()
+    if not existing:
+        flash("매뉴얼 항목을 찾을 수 없습니다.")
+        return redirect(url_for("manual_list"))
+
+    current_image = existing["image_path"] or ""
+    new_image = save_uploaded_image(request.files.get("image"))
+    if new_image is None:
+        flash("허용된 이미지 형식(png, jpg, jpeg, gif, webp)만 업로드할 수 있습니다.")
+        return redirect(url_for("manual_detail", manual_id=manual_id))
+
+    remove_existing = request.form.get("remove_image") == "1"
+    if new_image:
+        delete_uploaded_image(current_image)
+        image_path = new_image
+    elif remove_existing:
+        delete_uploaded_image(current_image)
+        image_path = ""
+    else:
+        image_path = current_image
+
     db.execute(
         """
         UPDATE manuals
-        SET title = ?, content = ?, sort_order = ?, updated_at = ?
+        SET title = ?, content = ?, image_path = ?, sort_order = ?, updated_at = ?
         WHERE id = ?
         """,
-        (title, content, sort_order, datetime.now().isoformat(), manual_id),
+        (title, content, image_path, sort_order, datetime.now().isoformat(), manual_id),
     )
     db.commit()
     write_audit_log("manual.update", f"manual_id={manual_id} title={title}")
@@ -1652,6 +1684,12 @@ def update_manual(manual_id):
 @role_required("admin")
 def delete_manual(manual_id):
     db = get_db()
+    existing = db.execute(
+        "SELECT image_path FROM manuals WHERE id = ?",
+        (manual_id,),
+    ).fetchone()
+    if existing:
+        delete_uploaded_image(existing["image_path"])
     db.execute("DELETE FROM manuals WHERE id = ?", (manual_id,))
     db.commit()
     write_audit_log("manual.delete", f"manual_id={manual_id}")

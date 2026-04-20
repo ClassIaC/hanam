@@ -104,6 +104,7 @@ SQLITE_CREATE_SCRIPT = """
             author_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
+            image_path TEXT NOT NULL DEFAULT '',
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -212,6 +213,7 @@ PG_INIT_STATEMENTS = [
         author_id INTEGER NOT NULL REFERENCES users(id),
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        image_path TEXT NOT NULL DEFAULT '',
         sort_order INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL

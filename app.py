@@ -295,11 +295,13 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             post_id INTEGER NOT NULL,
             author_id INTEGER NOT NULL,
+            parent_comment_id INTEGER,
             content TEXT NOT NULL,
             image_path TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             FOREIGN KEY(post_id) REFERENCES board_posts(id),
-            FOREIGN KEY(author_id) REFERENCES users(id)
+            FOREIGN KEY(author_id) REFERENCES users(id),
+            FOREIGN KEY(parent_comment_id) REFERENCES board_comments(id)
         );
 
         CREATE TABLE IF NOT EXISTS notices (
@@ -326,6 +328,7 @@ def init_db():
     ensure_column(db, "users", "is_deleted", "ALTER TABLE users ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
     ensure_column(db, "board_posts", "image_path", "ALTER TABLE board_posts ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
     ensure_column(db, "board_comments", "image_path", "ALTER TABLE board_comments ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
+    ensure_column(db, "board_comments", "parent_comment_id", "ALTER TABLE board_comments ADD COLUMN parent_comment_id INTEGER")
     db.execute(
         """
         UPDATE users
@@ -1309,20 +1312,31 @@ def board_detail(post_id):
 
     comments = db.execute(
         """
-        SELECT id, author_id, content, image_path, created_at
+        SELECT id, author_id, content, image_path, created_at, parent_comment_id
         FROM board_comments
         WHERE post_id = ?
         ORDER BY created_at ASC
         """,
         (post_id,),
     ).fetchall()
-    return render_template("board_detail.html", post=post, comments=comments)
+    parent_comments = [c for c in comments if c["parent_comment_id"] is None]
+    replies_by_parent = {}
+    for c in comments:
+        if c["parent_comment_id"] is not None:
+            replies_by_parent.setdefault(c["parent_comment_id"], []).append(c)
+    return render_template(
+        "board_detail.html",
+        post=post,
+        parent_comments=parent_comments,
+        replies_by_parent=replies_by_parent,
+    )
 
 
 @app.route("/board/<int:post_id>/comments", methods=["POST"])
 @login_required
 def create_board_comment(post_id):
     content = request.form.get("content", "").strip()
+    parent_comment_id_raw = request.form.get("parent_comment_id", "").strip()
     image_path = save_uploaded_image(request.files.get("image"))
     if len(content) < 1:
         flash("댓글 내용을 입력해 주세요.")
@@ -1337,12 +1351,27 @@ def create_board_comment(post_id):
         flash("게시글을 찾을 수 없습니다.")
         return redirect(url_for("board_list"))
 
+    parent_comment_id = None
+    if parent_comment_id_raw:
+        try:
+            parent_comment_id = int(parent_comment_id_raw)
+        except ValueError:
+            flash("잘못된 대댓글 요청입니다.")
+            return redirect(url_for("board_detail", post_id=post_id))
+        parent_comment = db.execute(
+            "SELECT id FROM board_comments WHERE id = ? AND post_id = ?",
+            (parent_comment_id, post_id),
+        ).fetchone()
+        if not parent_comment:
+            flash("원댓글을 찾을 수 없습니다.")
+            return redirect(url_for("board_detail", post_id=post_id))
+
     db.execute(
         """
-        INSERT INTO board_comments (post_id, author_id, content, image_path, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO board_comments (post_id, author_id, parent_comment_id, content, image_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (post_id, session["user_id"], content, image_path or "", datetime.now().isoformat()),
+        (post_id, session["user_id"], parent_comment_id, content, image_path or "", datetime.now().isoformat()),
     )
     db.commit()
     write_audit_log("board.comment.create", f"post_id={post_id}")
@@ -1454,9 +1483,16 @@ def delete_board_comment(comment_id):
         flash("삭제 권한이 없습니다.")
         return redirect(url_for("board_detail", post_id=comment["post_id"]))
 
+    reply_images = db.execute(
+        "SELECT image_path FROM board_comments WHERE parent_comment_id = ?",
+        (comment_id,),
+    ).fetchall()
+    db.execute("DELETE FROM board_comments WHERE parent_comment_id = ?", (comment_id,))
     db.execute("DELETE FROM board_comments WHERE id = ?", (comment_id,))
     db.commit()
     delete_uploaded_image(comment["image_path"])
+    for r in reply_images:
+        delete_uploaded_image(r["image_path"])
     write_audit_log("board.comment.delete", f"comment_id={comment_id}")
     flash("댓글이 삭제되었습니다.")
     return redirect(url_for("board_detail", post_id=comment["post_id"]))

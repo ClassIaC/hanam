@@ -48,8 +48,25 @@ USE_POSTGRES = bool(_database_url())
 
 if USE_POSTGRES:
     import psycopg2
+    from psycopg2 import pool as _pg_pool_mod
 
     DBIntegrityError = psycopg2.IntegrityError
+    _PG_POOL = None
+
+    def _get_pg_pool():
+        global _PG_POOL
+        if _PG_POOL is None:
+            _PG_POOL = _pg_pool_mod.SimpleConnectionPool(
+                1,
+                int(os.getenv("PG_POOL_MAX", "5")),
+                dsn=_normalize_postgres_url(_database_url()),
+                connect_timeout=10,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=3,
+            )
+        return _PG_POOL
 else:
     DBIntegrityError = sqlite3.IntegrityError
 
@@ -159,8 +176,10 @@ class PostgresConnAdapter:
 def get_db():
     if "db" not in g:
         if USE_POSTGRES:
-            raw = psycopg2.connect(_normalize_postgres_url(_database_url()))
-            g.db = PostgresConnAdapter(raw)
+            raw = _get_pg_pool().getconn()
+            adapter = PostgresConnAdapter(raw)
+            adapter._pooled = True
+            g.db = adapter
         else:
             raw = sqlite3.connect(app.config["DATABASE"])
             raw.row_factory = sqlite3.Row
@@ -171,7 +190,23 @@ def get_db():
 @app.teardown_appcontext
 def close_db(_exception):
     db = g.pop("db", None)
-    if db is not None:
+    if db is None:
+        return
+    if USE_POSTGRES and getattr(db, "_pooled", False):
+        raw = db._conn
+        try:
+            if _exception is not None:
+                raw.rollback()
+        except Exception:
+            pass
+        try:
+            _get_pg_pool().putconn(raw)
+        except Exception:
+            try:
+                raw.close()
+            except Exception:
+                pass
+    else:
         db.close()
 
 

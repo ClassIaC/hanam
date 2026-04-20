@@ -1,0 +1,13 @@
+body{background:#f6f8fb;color:#111827;font-family:"Pretendard","Noto Sans KR","Segoe UI",Arial,sans-serif}
+.topbar{background:#fff;border-bottom:1px solid #e5e7eb;box-shadow:0 2px 8px rgba(15,23,42,.06)}
+.brand{color:#0f172a;font-size:22px}
+.user-area a,.topbar a{color:#475569}
+.subnav a{background:#fff;border:1px solid #dbe3ef;border-radius:10px}
+.card{border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+.card h2{font-size:22px}
+table{border-collapse:separate;border-spacing:0}
+thead{background:#f8fafc}
+th,td{border-bottom:1px solid #edf2f7;padding:11px 9px}
+button{border-radius:10px}
+.stats-grid .stat-card{border:1px solid #e5e7eb;border-radius:14px}
+.status-badge{border-radius:999px}

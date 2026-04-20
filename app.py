@@ -247,6 +247,25 @@ def init_db():
             created_at TEXT NOT NULL,
             FOREIGN KEY(actor_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS board_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            author_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(author_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS board_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id INTEGER NOT NULL,
+            author_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(post_id) REFERENCES board_posts(id),
+            FOREIGN KEY(author_id) REFERENCES users(id)
+        );
         """
     )
 
@@ -435,6 +454,69 @@ def change_password():
         return redirect(url_for("dashboard"))
 
     return render_template("change_password.html")
+
+
+@app.route("/profile")
+@login_required
+def profile():
+    db = get_db()
+    user = db.execute(
+        """
+        SELECT id, username, full_name, email, role
+        FROM users
+        WHERE id = ?
+        """,
+        (session["user_id"],),
+    ).fetchone()
+    return render_template("profile.html", user=user)
+
+
+@app.route("/profile/email", methods=["POST"])
+@login_required
+def update_profile_email():
+    email = request.form.get("email", "").strip()
+    if email and "@" not in email:
+        flash("이메일 형식이 올바르지 않습니다.")
+        return redirect(url_for("profile"))
+
+    db = get_db()
+    db.execute(
+        "UPDATE users SET email = ? WHERE id = ?",
+        (email, session["user_id"]),
+    )
+    db.commit()
+    write_audit_log("profile.email.update", f"user_id={session['user_id']}, email={email or '-'}")
+    flash("이메일이 변경되었습니다.")
+    return redirect(url_for("profile"))
+
+
+@app.route("/profile/password", methods=["POST"])
+@login_required
+def update_profile_password():
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+    if len(new_password) < 8:
+        flash("새 비밀번호는 8자 이상이어야 합니다.")
+        return redirect(url_for("profile"))
+
+    db = get_db()
+    user = db.execute(
+        "SELECT password_hash FROM users WHERE id = ?",
+        (session["user_id"],),
+    ).fetchone()
+    if not user or not check_password_hash(user["password_hash"], current_password):
+        flash("현재 비밀번호가 일치하지 않습니다.")
+        return redirect(url_for("profile"))
+
+    db.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+        (generate_password_hash(new_password), session["user_id"]),
+    )
+    db.commit()
+    session["must_change_password"] = 0
+    write_audit_log("profile.password.update", f"user_id={session['user_id']} 비밀번호 변경")
+    flash("비밀번호가 변경되었습니다.")
+    return redirect(url_for("profile"))
 
 
 @app.route("/dashboard")
@@ -1083,6 +1165,101 @@ def create_availability_request():
     )
     flash("희망 근무/휴무 요청이 등록되었습니다.")
     return redirect(url_for("staff_dashboard"))
+
+
+@app.route("/board")
+@login_required
+def board_list():
+    db = get_db()
+    posts = db.execute(
+        """
+        SELECT p.id, p.title, p.content, p.created_at, COUNT(c.id) AS comment_count
+        FROM board_posts p
+        LEFT JOIN board_comments c ON c.post_id = p.id
+        GROUP BY p.id
+        ORDER BY p.created_at DESC
+        LIMIT 100
+        """
+    ).fetchall()
+    return render_template("board_list.html", posts=posts)
+
+
+@app.route("/board/new", methods=["POST"])
+@login_required
+def create_board_post():
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+    if len(title) < 2 or len(content) < 2:
+        flash("제목/내용을 2자 이상 입력해 주세요.")
+        return redirect(url_for("board_list"))
+
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO board_posts (author_id, title, content, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (session["user_id"], title, content, datetime.now().isoformat()),
+    )
+    db.commit()
+    write_audit_log("board.post.create", f"title={title}")
+    flash("익명 게시글이 등록되었습니다.")
+    return redirect(url_for("board_list"))
+
+
+@app.route("/board/<int:post_id>")
+@login_required
+def board_detail(post_id):
+    db = get_db()
+    post = db.execute(
+        """
+        SELECT id, title, content, created_at
+        FROM board_posts
+        WHERE id = ?
+        """,
+        (post_id,),
+    ).fetchone()
+    if not post:
+        flash("게시글을 찾을 수 없습니다.")
+        return redirect(url_for("board_list"))
+
+    comments = db.execute(
+        """
+        SELECT id, content, created_at
+        FROM board_comments
+        WHERE post_id = ?
+        ORDER BY created_at ASC
+        """,
+        (post_id,),
+    ).fetchall()
+    return render_template("board_detail.html", post=post, comments=comments)
+
+
+@app.route("/board/<int:post_id>/comments", methods=["POST"])
+@login_required
+def create_board_comment(post_id):
+    content = request.form.get("content", "").strip()
+    if len(content) < 1:
+        flash("댓글 내용을 입력해 주세요.")
+        return redirect(url_for("board_detail", post_id=post_id))
+
+    db = get_db()
+    exists = db.execute("SELECT id FROM board_posts WHERE id = ?", (post_id,)).fetchone()
+    if not exists:
+        flash("게시글을 찾을 수 없습니다.")
+        return redirect(url_for("board_list"))
+
+    db.execute(
+        """
+        INSERT INTO board_comments (post_id, author_id, content, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (post_id, session["user_id"], content, datetime.now().isoformat()),
+    )
+    db.commit()
+    write_audit_log("board.comment.create", f"post_id={post_id}")
+    flash("익명 댓글이 등록되었습니다.")
+    return redirect(url_for("board_detail", post_id=post_id))
 
 
 @app.before_request

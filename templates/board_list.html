@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>익명 게시판</h2>
+  <p class="help">작성자/댓글 작성자는 익명으로 표시됩니다.</p>
+  <form method="post" action="{{ url_for('create_board_post') }}" class="form-grid">
+    <label>제목</label>
+    <input type="text" name="title" minlength="2" required />
+    <label>내용</label>
+    <textarea name="content" rows="4" minlength="2" required></textarea>
+    <button type="submit">익명 글 등록</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>최근 게시글</h2>
+  <table>
+    <thead>
+      <tr><th>번호</th><th>제목</th><th>댓글</th><th>작성일</th><th>작성자</th></tr>
+    </thead>
+    <tbody>
+      {% for p in posts %}
+      <tr>
+        <td>{{ p['id'] }}</td>
+        <td><a href="{{ url_for('board_detail', post_id=p['id']) }}">[{{ p['title'] }}]</a></td>
+        <td>{{ p['comment_count'] }}</td>
+        <td>{{ p['created_at'][:16].replace('T', ' ') }}</td>
+        <td>익명{{ p['id'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

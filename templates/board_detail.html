@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>{{ post['title'] }}</h2>
+  <p class="help">작성자: 익명{{ post['id'] }} / {{ post['created_at'][:16].replace('T', ' ') }}</p>
+  <p class="board-content">{{ post['content'] }}</p>
+  <a class="link" href="{{ url_for('board_list') }}">목록으로</a>
+</section>
+
+<section class="card">
+  <h2>익명 댓글</h2>
+  <form method="post" action="{{ url_for('create_board_comment', post_id=post['id']) }}" class="form-grid">
+    <label>댓글 내용</label>
+    <textarea name="content" rows="3" required></textarea>
+    <button type="submit">익명 댓글 등록</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>댓글 목록</h2>
+  {% if comments %}
+  <table>
+    <thead>
+      <tr><th>작성자</th><th>내용</th><th>작성일</th></tr>
+    </thead>
+    <tbody>
+      {% for c in comments %}
+      <tr>
+        <td>익명{{ c['id'] }}</td>
+        <td>{{ c['content'] }}</td>
+        <td>{{ c['created_at'][:16].replace('T', ' ') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>아직 댓글이 없습니다.</p>
+  {% endif %}
+</section>
+{% endblock %}

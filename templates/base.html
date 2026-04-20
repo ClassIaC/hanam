@@ -26,8 +26,12 @@
         {% if session.get('role') == 'admin' %}
         <a href="{{ url_for('admin_dashboard') }}">대시보드</a>
         <a href="{{ url_for('admin_calendar') }}">캘린더</a>
+        <a href="{{ url_for('board_list') }}">익명 게시판</a>
+        <a href="{{ url_for('profile') }}">회원정보</a>
         {% else %}
         <a href="{{ url_for('staff_dashboard') }}">내 근무</a>
+        <a href="{{ url_for('board_list') }}">익명 게시판</a>
+        <a href="{{ url_for('profile') }}">회원정보</a>
         {% endif %}
       </nav>
       {% endif %}

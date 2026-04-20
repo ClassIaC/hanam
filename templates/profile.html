@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>회원정보 수정</h2>
+  <table>
+    <tbody>
+      <tr><th>이름</th><td>{{ user['full_name'] }}</td></tr>
+      <tr><th>아이디</th><td>{{ user['username'] }}</td></tr>
+      <tr><th>권한</th><td>{{ user['role'] }}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="grid-two">
+  <article class="card">
+    <h2>이메일 변경</h2>
+    <form method="post" action="{{ url_for('update_profile_email') }}" class="form-grid">
+      <label>이메일</label>
+      <input type="email" name="email" value="{{ user['email'] }}" placeholder="example@email.com" />
+      <button type="submit">이메일 저장</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h2>비밀번호 변경</h2>
+    <form method="post" action="{{ url_for('update_profile_password') }}" class="form-grid">
+      <label>현재 비밀번호</label>
+      <input type="password" name="current_password" required />
+      <label>새 비밀번호 (8자 이상)</label>
+      <input type="password" name="new_password" minlength="8" required />
+      <button type="submit">비밀번호 저장</button>
+    </form>
+  </article>
+</section>
+{% endblock %}

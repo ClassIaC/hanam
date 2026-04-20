@@ -141,6 +141,7 @@ label {
 
 input,
 select,
+textarea,
 button {
   width: 100%;
   padding: 11px 12px;
@@ -150,7 +151,8 @@ button {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
@@ -266,6 +268,12 @@ tbody tr:hover {
 .help {
   color: #64748b;
   font-size: 13px;
+}
+
+.board-content {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin: 10px 0 14px;
 }
 
 @media (max-width: 760px) {

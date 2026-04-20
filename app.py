@@ -6,10 +6,12 @@ import csv
 import io
 import os
 import smtplib
+import secrets
 from email.message import EmailMessage
 
 from flask import Flask, g, redirect, render_template, request, session, url_for, flash, Response
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 
 app = Flask(__name__)
@@ -20,6 +22,9 @@ app.config["SMTP_PORT"] = int(os.getenv("SMTP_PORT", "587"))
 app.config["SMTP_USER"] = os.getenv("SMTP_USER", "")
 app.config["SMTP_PASSWORD"] = os.getenv("SMTP_PASSWORD", "")
 app.config["SMTP_FROM"] = os.getenv("SMTP_FROM", "")
+app.config["UPLOAD_DIR"] = os.path.join("static", "uploads")
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
 WEEKDAY_OPTIONS = [
     ("0", "월요일"),
     ("1", "화요일"),
@@ -154,6 +159,34 @@ def notify_staff_by_id(staff_id, subject, body):
     return sent
 
 
+def save_uploaded_image(file_storage):
+    if not file_storage or not file_storage.filename:
+        return ""
+    filename = secure_filename(file_storage.filename)
+    if "." not in filename:
+        return None
+    ext = filename.rsplit(".", 1)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return None
+    unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}.{ext}"
+    saved_path = os.path.join(app.config["UPLOAD_DIR"], unique_name)
+    file_storage.save(saved_path)
+    return f"uploads/{unique_name}"
+
+
+def delete_uploaded_image(relative_path):
+    if not relative_path:
+        return
+    if not relative_path.startswith("uploads/"):
+        return
+    abs_path = os.path.join("static", *relative_path.split("/"))
+    if os.path.exists(abs_path):
+        try:
+            os.remove(abs_path)
+        except OSError:
+            pass
+
+
 def build_month_calendar(year, month, shifts_by_date, selected_date):
     first_weekday, last_day = calendar.monthrange(year, month)
     weeks = []
@@ -253,6 +286,7 @@ def init_db():
             author_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
+            image_path TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             FOREIGN KEY(author_id) REFERENCES users(id)
         );
@@ -262,6 +296,7 @@ def init_db():
             post_id INTEGER NOT NULL,
             author_id INTEGER NOT NULL,
             content TEXT NOT NULL,
+            image_path TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             FOREIGN KEY(post_id) REFERENCES board_posts(id),
             FOREIGN KEY(author_id) REFERENCES users(id)
@@ -280,6 +315,8 @@ def init_db():
     ensure_column(db, "users", "approved_by", "ALTER TABLE users ADD COLUMN approved_by INTEGER")
     ensure_column(db, "users", "approved_at", "ALTER TABLE users ADD COLUMN approved_at TEXT")
     ensure_column(db, "users", "is_deleted", "ALTER TABLE users ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+    ensure_column(db, "board_posts", "image_path", "ALTER TABLE board_posts ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
+    ensure_column(db, "board_comments", "image_path", "ALTER TABLE board_comments ADD COLUMN image_path TEXT NOT NULL DEFAULT ''")
     db.execute(
         """
         UPDATE users
@@ -1173,7 +1210,7 @@ def board_list():
     db = get_db()
     posts = db.execute(
         """
-        SELECT p.id, p.title, p.content, p.created_at, COUNT(c.id) AS comment_count
+        SELECT p.id, p.author_id, p.title, p.content, p.image_path, p.created_at, COUNT(c.id) AS comment_count
         FROM board_posts p
         LEFT JOIN board_comments c ON c.post_id = p.id
         GROUP BY p.id
@@ -1189,17 +1226,21 @@ def board_list():
 def create_board_post():
     title = request.form.get("title", "").strip()
     content = request.form.get("content", "").strip()
+    image_path = save_uploaded_image(request.files.get("image"))
     if len(title) < 2 or len(content) < 2:
         flash("제목/내용을 2자 이상 입력해 주세요.")
+        return redirect(url_for("board_list"))
+    if image_path is None:
+        flash("이미지는 png/jpg/jpeg/gif/webp 형식만 업로드할 수 있습니다.")
         return redirect(url_for("board_list"))
 
     db = get_db()
     db.execute(
         """
-        INSERT INTO board_posts (author_id, title, content, created_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO board_posts (author_id, title, content, image_path, created_at)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (session["user_id"], title, content, datetime.now().isoformat()),
+        (session["user_id"], title, content, image_path or "", datetime.now().isoformat()),
     )
     db.commit()
     write_audit_log("board.post.create", f"title={title}")
@@ -1213,7 +1254,7 @@ def board_detail(post_id):
     db = get_db()
     post = db.execute(
         """
-        SELECT id, title, content, created_at
+        SELECT id, author_id, title, content, image_path, created_at
         FROM board_posts
         WHERE id = ?
         """,
@@ -1225,7 +1266,7 @@ def board_detail(post_id):
 
     comments = db.execute(
         """
-        SELECT id, content, created_at
+        SELECT id, author_id, content, image_path, created_at
         FROM board_comments
         WHERE post_id = ?
         ORDER BY created_at ASC
@@ -1239,8 +1280,12 @@ def board_detail(post_id):
 @login_required
 def create_board_comment(post_id):
     content = request.form.get("content", "").strip()
+    image_path = save_uploaded_image(request.files.get("image"))
     if len(content) < 1:
         flash("댓글 내용을 입력해 주세요.")
+        return redirect(url_for("board_detail", post_id=post_id))
+    if image_path is None:
+        flash("이미지는 png/jpg/jpeg/gif/webp 형식만 업로드할 수 있습니다.")
         return redirect(url_for("board_detail", post_id=post_id))
 
     db = get_db()
@@ -1251,15 +1296,68 @@ def create_board_comment(post_id):
 
     db.execute(
         """
-        INSERT INTO board_comments (post_id, author_id, content, created_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO board_comments (post_id, author_id, content, image_path, created_at)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (post_id, session["user_id"], content, datetime.now().isoformat()),
+        (post_id, session["user_id"], content, image_path or "", datetime.now().isoformat()),
     )
     db.commit()
     write_audit_log("board.comment.create", f"post_id={post_id}")
     flash("익명 댓글이 등록되었습니다.")
     return redirect(url_for("board_detail", post_id=post_id))
+
+
+@app.route("/board/<int:post_id>/delete", methods=["POST"])
+@login_required
+def delete_board_post(post_id):
+    db = get_db()
+    post = db.execute(
+        "SELECT id, author_id, image_path FROM board_posts WHERE id = ?",
+        (post_id,),
+    ).fetchone()
+    if not post:
+        flash("게시글을 찾을 수 없습니다.")
+        return redirect(url_for("board_list"))
+    if session.get("role") != "admin" and post["author_id"] != session["user_id"]:
+        flash("삭제 권한이 없습니다.")
+        return redirect(url_for("board_detail", post_id=post_id))
+
+    comment_images = db.execute(
+        "SELECT image_path FROM board_comments WHERE post_id = ?",
+        (post_id,),
+    ).fetchall()
+    db.execute("DELETE FROM board_comments WHERE post_id = ?", (post_id,))
+    db.execute("DELETE FROM board_posts WHERE id = ?", (post_id,))
+    db.commit()
+    delete_uploaded_image(post["image_path"])
+    for c in comment_images:
+        delete_uploaded_image(c["image_path"])
+    write_audit_log("board.post.delete", f"post_id={post_id}")
+    flash("게시글이 삭제되었습니다.")
+    return redirect(url_for("board_list"))
+
+
+@app.route("/board/comments/<int:comment_id>/delete", methods=["POST"])
+@login_required
+def delete_board_comment(comment_id):
+    db = get_db()
+    comment = db.execute(
+        "SELECT id, post_id, author_id, image_path FROM board_comments WHERE id = ?",
+        (comment_id,),
+    ).fetchone()
+    if not comment:
+        flash("댓글을 찾을 수 없습니다.")
+        return redirect(url_for("board_list"))
+    if session.get("role") != "admin" and comment["author_id"] != session["user_id"]:
+        flash("삭제 권한이 없습니다.")
+        return redirect(url_for("board_detail", post_id=comment["post_id"]))
+
+    db.execute("DELETE FROM board_comments WHERE id = ?", (comment_id,))
+    db.commit()
+    delete_uploaded_image(comment["image_path"])
+    write_audit_log("board.comment.delete", f"comment_id={comment_id}")
+    flash("댓글이 삭제되었습니다.")
+    return redirect(url_for("board_detail", post_id=comment["post_id"]))
 
 
 @app.before_request

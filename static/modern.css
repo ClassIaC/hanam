@@ -1,7 +1,9 @@
 body{background:#f6f8fb;color:#111827;font-family:"Pretendard","Noto Sans KR","Segoe UI",Arial,sans-serif}
-.topbar{background:#fff;border-bottom:1px solid #e5e7eb;box-shadow:0 2px 8px rgba(15,23,42,.06)}
+.topbar{background:#fff;color:#0f172a;border-bottom:1px solid #e5e7eb;box-shadow:0 2px 8px rgba(15,23,42,.06)}
 .brand{color:#0f172a;font-size:22px}
+.user-area span{color:#0f172a;font-weight:700}
 .user-area a,.topbar a{color:#475569}
+.role-chip{background:#e0e7ff;color:#1e3a8a}
 .subnav a{background:#fff;border:1px solid #dbe3ef;border-radius:10px}
 .card{border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
 .card h2{font-size:22px}
@@ -11,3 +13,6 @@ th,td{border-bottom:1px solid #edf2f7;padding:11px 9px}
 button{border-radius:10px}
 .stats-grid .stat-card{border:1px solid #e5e7eb;border-radius:14px}
 .status-badge{border-radius:999px}
+.board-image{max-width:100%;border-radius:10px;border:1px solid #e2e8f0;margin:8px 0 12px}
+.board-comment-image-wrap{margin-top:8px}
+.board-comment-image{max-width:220px;border-radius:8px;border:1px solid #e2e8f0}

@@ -4,14 +4,24 @@
   <h2>{{ post['title'] }}</h2>
   <p class="help">작성자: 익명{{ post['id'] }} / {{ post['created_at'][:16].replace('T', ' ') }}</p>
   <p class="board-content">{{ post['content'] }}</p>
+  {% if post['image_path'] %}
+  <img class="board-image" src="{{ url_for('static', filename=post['image_path']) }}" alt="게시글 첨부 이미지" />
+  {% endif %}
+  {% if session.get('role') == 'admin' or post['author_id'] == session.get('user_id') %}
+  <form method="post" action="{{ url_for('delete_board_post', post_id=post['id']) }}" onsubmit="return confirm('이 게시글을 삭제하시겠습니까?');">
+    <button type="submit" class="btn-danger">게시글 삭제</button>
+  </form>
+  {% endif %}
   <a class="link" href="{{ url_for('board_list') }}">목록으로</a>
 </section>
 
 <section class="card">
   <h2>익명 댓글</h2>
-  <form method="post" action="{{ url_for('create_board_comment', post_id=post['id']) }}" class="form-grid">
+  <form method="post" action="{{ url_for('create_board_comment', post_id=post['id']) }}" class="form-grid" enctype="multipart/form-data">
     <label>댓글 내용</label>
     <textarea name="content" rows="3" required></textarea>
+    <label>사진 첨부 (선택)</label>
+    <input type="file" name="image" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" />
     <button type="submit">익명 댓글 등록</button>
   </form>
 </section>
@@ -21,14 +31,28 @@
   {% if comments %}
   <table>
     <thead>
-      <tr><th>작성자</th><th>내용</th><th>작성일</th></tr>
+      <tr><th>작성자</th><th>내용</th><th>작성일</th><th>관리</th></tr>
     </thead>
     <tbody>
       {% for c in comments %}
       <tr>
         <td>익명{{ c['id'] }}</td>
-        <td>{{ c['content'] }}</td>
+        <td>
+          {{ c['content'] }}
+          {% if c['image_path'] %}
+          <div class="board-comment-image-wrap">
+            <img class="board-comment-image" src="{{ url_for('static', filename=c['image_path']) }}" alt="댓글 첨부 이미지" />
+          </div>
+          {% endif %}
+        </td>
         <td>{{ c['created_at'][:16].replace('T', ' ') }}</td>
+        <td>
+          {% if session.get('role') == 'admin' or c['author_id'] == session.get('user_id') %}
+          <form method="post" action="{{ url_for('delete_board_comment', comment_id=c['id']) }}" onsubmit="return confirm('이 댓글을 삭제하시겠습니까?');">
+            <button type="submit" class="btn-danger">삭제</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
